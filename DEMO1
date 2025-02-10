@@ -1,0 +1,9 @@
+import numpy as np
+import tensorflow as tf
+import cv2
+from tensorflow import keras
+
+print("NumPy version:", np.__version__)
+print("TensorFlow version:", tf.__version__)
+print("OpenCV version:", cv2.__version__)
+print("Keras version:", keras.__version__)
