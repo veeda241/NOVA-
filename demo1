@@ -1,0 +1,257 @@
+import pymysql
+import logging
+from datetime import datetime, timezone
+from pymysql import MySQLError
+
+# Database configuration (Hardcoded – Not recommended for security reasons)
+config = {
+    'user': 'root',
+    'password': 'vyasxdxd@17',
+    'host': 'localhost',
+    'database': 'emotional_ai',
+    'charset': 'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor
+}
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+def create_connection():
+    """Create a database connection"""
+    try:
+        connection = pymysql.connect(**config)
+        logging.info("Connection to MySQL DB successful")
+        return connection
+    except MySQLError as e:
+        logging.error(f"Database connection error: {e}")
+        return None
+
+def insert_emotion(user_id, emotion, intensity):
+    """Insert a new emotion record into the emotions table"""
+    connection = create_connection()
+    if not connection:
+        return
+
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            INSERT INTO emotions (user_id, emotion, intensity, timestamp)
+            VALUES (%s, %s, %s, %s)
+            """
+            timestamp = datetime.now(timezone.utc)  # Corrected UTC timestamp
+            cursor.execute(query, (user_id, emotion, intensity, timestamp))
+            connection.commit()
+            logging.info("Emotion record inserted successfully")
+    except MySQLError as e:
+        connection.rollback()
+        logging.error(f"Database error: {e}")
+    finally:
+        connection.close()
+
+def get_emotions(user_id):
+    """Retrieve all emotions for a given user"""
+    connection = create_connection()
+    if not connection:
+        return []
+
+    try:
+        with connection.cursor() as cursor:
+            query = "SELECT emotion, intensity, timestamp FROM emotions WHERE user_id = %s"
+            cursor.execute(query, (user_id,))
+            records = cursor.fetchall()
+            return records
+    except MySQLError as e:
+        logging.error(f"Database error: {e}")
+        return []
+    finally:
+        connection.close()
+
+# Example usage
+if __name__ == "__main__":
+    insert_emotion(1, "happy", 0.8)
+
+    emotions = get_emotions(1)
+    for emotion in emotions:
+        print(f"Emotion: {emotion['emotion']}, Intensity: {emotion['intensity']}, Timestamp: {emotion['timestamp']}")
+
+def insert_emotion(user_id, emotion, intensity):
+    """Insert a new emotion record into the emotions table, avoiding duplicates"""
+    connection = create_connection()
+    if not connection:
+        return
+
+    try:
+        with connection.cursor() as cursor:
+            # Check if the same emotion already exists for the user
+            check_query = """
+            SELECT * FROM emotions WHERE user_id = %s AND emotion = %s AND intensity = %s
+            """
+            cursor.execute(check_query, (user_id, emotion, intensity))
+            existing_record = cursor.fetchone()
+
+            if existing_record:
+                logging.info("Emotion record already exists, skipping insert.")
+            else:
+                # Insert new record if not duplicate
+                insert_query = """
+                INSERT INTO emotions (user_id, emotion, intensity, timestamp)
+                VALUES (%s, %s, %s, %s)
+                """
+                timestamp = datetime.now(timezone.utc)
+                cursor.execute(insert_query, (user_id, emotion, intensity, timestamp))
+                connection.commit()
+                logging.info("Emotion record inserted successfully")
+    except MySQLError as e:
+        connection.rollback()
+        logging.error(f"Database error: {e}")
+    finally:
+        connection.close()
+
+def get_emotions(user_id):
+    """Retrieve emotions for a user from today"""
+    connection = create_connection()
+    if not connection:
+        return []
+
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            SELECT emotion, intensity, timestamp 
+            FROM emotions 
+            WHERE user_id = %s 
+            AND DATE(timestamp) = CURDATE()
+            """
+            cursor.execute(query, (user_id,))
+            records = cursor.fetchall()
+            return records
+    except MySQLError as e:
+        logging.error(f"Database error: {e}")
+        return []
+    finally:
+        connection.close()
+
+def insert_multiple_emotions(user_id, emotions_list):
+    """Insert multiple emotions for a user"""
+    connection = create_connection()
+    if not connection:
+        return
+
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            INSERT INTO emotions (user_id, emotion, intensity, timestamp)
+            VALUES (%s, %s, %s, %s)
+            """
+            timestamp = datetime.now(timezone.utc)
+
+            for emotion, intensity in emotions_list:
+                cursor.execute(query, (user_id, emotion, intensity, timestamp))
+
+            connection.commit()
+            logging.info(f"{len(emotions_list)} emotion records inserted successfully")
+    except MySQLError as e:
+        connection.rollback()
+        logging.error(f"Database error: {e}")
+    finally:
+        connection.close()
+
+# Example Usage
+emotions_to_insert = [
+    ("happy", 0.8),
+    ("sad", 0.6),
+    ("angry", 0.5),
+    ("excited", 0.9),
+    ("nervous", 0.4)
+]
+insert_multiple_emotions(1, emotions_to_insert)
+
+def get_all_emotions(user_id):
+    """Retrieve all emotions for a given user, sorted by timestamp"""
+    connection = create_connection()
+    if not connection:
+        return []
+
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            SELECT emotion, intensity, timestamp 
+            FROM emotions 
+            WHERE user_id = %s 
+            ORDER BY timestamp DESC
+            """
+            cursor.execute(query, (user_id,))
+            records = cursor.fetchall()
+            return records
+    except MySQLError as e:
+        logging.error(f"Database error: {e}")
+        return []
+    finally:
+        connection.close()
+
+# Example Usage
+all_emotions = get_all_emotions(1)
+for emotion in all_emotions:
+    print(f"Emotion: {emotion['emotion']}, Intensity: {emotion['intensity']}, Timestamp: {emotion['timestamp']}")
+
+def get_most_frequent_emotion(user_id):
+    """Retrieve the most frequent emotion for a user"""
+    connection = create_connection()
+    if not connection:
+        return None
+
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            SELECT emotion, COUNT(*) as count
+            FROM emotions
+            WHERE user_id = %s
+            GROUP BY emotion
+            ORDER BY count DESC
+            LIMIT 1
+            """
+            cursor.execute(query, (user_id,))
+            result = cursor.fetchone()
+            return result if result else None
+    except MySQLError as e:
+        logging.error(f"Database error: {e}")
+        return None
+    finally:
+        connection.close()
+
+# Example Usage
+most_frequent = get_most_frequent_emotion(1)
+if most_frequent:
+    print(f"Most Frequent Emotion: {most_frequent['emotion']} (Count: {most_frequent['count']})")
+else:
+    print("No emotions recorded yet.")
+
+def get_highest_intensity_emotion(user_id):
+    """Retrieve the highest intensity emotion for a user"""
+    connection = create_connection()
+    if not connection:
+        return None
+
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            SELECT emotion, intensity, timestamp
+            FROM emotions
+            WHERE user_id = %s
+            ORDER BY intensity DESC
+            LIMIT 1
+            """
+            cursor.execute(query, (user_id,))
+            result = cursor.fetchone()
+            return result if result else None
+    except MySQLError as e:
+        logging.error(f"Database error: {e}")
+        return None
+    finally:
+        connection.close()
+
+# Example Usage
+highest_intensity = get_highest_intensity_emotion(1)
+if highest_intensity:
+    print(f"Strongest Emotion: {highest_intensity['emotion']} (Intensity: {highest_intensity['intensity']})")
+else:
+    print("No emotions recorded yet.")
