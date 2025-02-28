@@ -1,0 +1,96 @@
+from flask import Flask, render_template, jsonify
+import cv2
+import pymysql
+import numpy as np
+from datetime import datetime, timezone
+from deepface import DeepFace
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# Database Configuration
+config = {
+    'user': 'root',
+    'password': 'vyasxdxd@17',  # Replace with environment variables for security
+    'host': 'localhost',
+    'database': 'emotional_ai',
+    'charset': 'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor,
+    'autocommit': True
+}
+
+def create_connection():
+    """Create and return a database connection."""
+    try:
+        connection = pymysql.connect(**config)
+        print("[INFO] Connected to MySQL Database")
+        return connection
+    except pymysql.MySQLError as e:
+        print(f"[ERROR] Database connection error: {e}")
+        return None
+
+def insert_emotion(user_id, emotion, intensity):
+    """Insert detected emotion into the database."""
+    connection = create_connection()
+    if not connection:
+        return
+
+    try:
+        with connection.cursor() as cursor:
+            query = """
+            INSERT INTO emotions (user_id, emotion, intensity, timestamp)
+            VALUES (%s, %s, %s, %s)
+            """
+            timestamp = datetime.now(timezone.utc)
+            cursor.execute(query, (user_id, emotion, intensity, timestamp))
+            print(f"[INFO] Emotion '{emotion}' recorded in DB.")
+    except pymysql.MySQLError as e:
+        print(f"[ERROR] Database error: {e}")
+    finally:
+        connection.close()
+
+@app.route("/")
+def home_text():
+    return "Hello, Flask is working!"
+
+@app.route("/about")
+def about():
+    return "This is the About Page"
+
+@app.route("/home")
+def home_page():
+    return render_template('index.html')
+
+@app.route("/detect_emotion")
+def detect_emotion():
+    """Capture image from webcam and detect emotion."""
+    cap = cv2.VideoCapture(0)
+    user_id = 1  # Example user ID, replace with dynamic user handling
+
+    ret, frame = cap.read()
+    cap.release()
+
+    if not ret:
+        return jsonify({"error": "Failed to capture image"})
+
+    try:
+        # Analyze emotions
+        result = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
+
+        if result:
+            dominant_emotion = result[0]['dominant_emotion']
+            intensity = result[0]['emotion'][dominant_emotion]
+
+            # Store emotion in database
+            insert_emotion(user_id, dominant_emotion, intensity)
+
+            return jsonify({"emotion": dominant_emotion, "intensity": intensity})
+        else:
+            return jsonify({"error": "No emotion detected"})
+
+    except Exception as e:
+        return jsonify({"error": f"Emotion detection error: {e}"})
+
+# Run the Flask app
+if __name__ == "__main__":
+    app.run(debug=True)
