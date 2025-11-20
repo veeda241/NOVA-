@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Build files
+/emotional-ai/frontend/build
+
+# Temporary files
+/C:/temp/
+.DS_Store
