@@ -1,16 +1,31 @@
 {
-  "name": "emotional-ai",
+  "name": "nova-",
   "version": "1.0.0",
-  "description": "An emotional AI assistant.",
-  "main": "backend/index.js",
+  "description": "",
+  "main": "script.js",
+  "dependencies": {
+    "face-api.js": "^0.22.2",
+    "node-fetch": "^2.1.2",
+    "seedrandom": "^2.4.3",
+    "tslib": "^1.14.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
   "scripts": {
-    "start": "node emotional-ai/backend/index.js",
-    "heroku-postbuild": "npm install --prefix emotional-ai/backend && npm install --prefix emotional-ai/frontend && npm run build --prefix emotional-ai/frontend"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "concurrently \"npm:start --prefix api\" \"npm:dev --prefix frontend\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/veeda241/NOVA-.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "face-api.js": "^0.22.2"
-  }
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/veeda241/NOVA-/issues"
+  },
+  "homepage": "https://github.com/veeda241/NOVA-#readme"
 }

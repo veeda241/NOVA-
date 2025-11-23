@@ -6,28 +6,32 @@ const port = 3001;
 app.use(cors());
 app.use(express.json());
 
-app.post('/chat', (req, res) => {
+app.post('/chat', async (req, res) => {
   const userMessage = req.body.message;
-  const lowerCaseMessage = userMessage.toLowerCase();
-  let aiResponse;
+  
+  try {
+    const response = await fetch('http://localhost:5000/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: userMessage }),
+    });
 
-  if (lowerCaseMessage.includes('sad') || lowerCaseMessage.includes('unhappy') || lowerCaseMessage.includes('down')) {
-    aiResponse = "I'm sorry to hear you're feeling that way. It's okay to feel sad, and I'm here to listen whenever you need to talk.";
-  } else if (lowerCaseMessage.includes('happy') || lowerCaseMessage.includes('joyful') || lowerCaseMessage.includes('great') || lowerCaseMessage.includes('good')) {
-    aiResponse = "That's wonderful to hear! I'm glad you're feeling happy. What's making you feel this way?";
-  } else if (lowerCaseMessage.includes('anxious') || lowerCaseMessage.includes('stressed') || lowerCaseMessage.includes('worried')) {
-    aiResponse = "It sounds like you're going through a stressful time. Remember to be kind to yourself. Let's talk through what's on your mind.";
-  } else if (lowerCaseMessage.includes('angry') || lowerCaseMessage.includes('frustrated') || lowerCaseMessage.includes('mad')) {
-    aiResponse = "It's completely valid to feel angry. Your feelings are important. What's causing this frustration?";
-  } else if (lowerCaseMessage.includes('not well') || lowerCaseMessage.includes('bad') || lowerCaseMessage.includes('not good')) {
-    aiResponse = "I'm sorry to hear you're not feeling well. Can you tell me a bit more about what's happening?";
-  } else if (lowerCaseMessage.includes('hi') || lowerCaseMessage.includes('hello') || lowerCaseMessage.includes('hey')) {
-    aiResponse = "Hello there! How are you feeling today?";
-  } else {
-    aiResponse = "Thank you for sharing that with me. Can you tell me more about what's on your mind?";
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error from Python backend: ${response.status} - ${errorText}`);
+      return res.status(response.status).json({ error: 'Failed to get analysis from LLM backend', details: errorText });
+    }
+
+    const data = await response.json();
+    // The Python backend already returns structured data, so we can directly send it
+    res.json({ message: "Analysis complete", analysisData: data }); 
+
+  } catch (error) {
+    console.error('Error communicating with Python LLM backend:', error);
+    res.status(500).json({ error: 'Internal server error while communicating with LLM backend' });
   }
-
-  res.json({ message: aiResponse });
 });
 
 app.listen(port, () => {

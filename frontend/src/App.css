@@ -1,94 +1,42 @@
-.App {
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  font-family: 'Roboto', sans-serif;
-  background-color: #f0f2f5;
 }
 
-.App-header {
-  background-color: #4CAF50;
-  padding: 20px;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
-.chat-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  max-width: 800px;
-  margin: 20px auto;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  overflow: hidden;
-  background-color: #fff;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.messages-display {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
 }
 
-.message {
-  margin-bottom: 10px;
-  padding: 10px 15px;
-  border-radius: 20px;
-  max-width: 70%;
-  word-wrap: break-word;
+.card {
+  padding: 2em;
 }
 
-.message.user {
-  background-color: #e0f7fa;
-  align-self: flex-end;
-  color: #004d40;
-}
-
-.message.ai {
-  background-color: #f1f8e9;
-  align-self: flex-start;
-  color: #1b5e20;
-}
-
-.message-input {
-  display: flex;
-  padding: 15px;
-  border-top: 1px solid #eee;
-  background-color: #f9f9f9;
-}
-
-.message-input input {
-  flex: 1;
-  padding: 10px 15px;
-  border: 1px solid #ccc;
-  border-radius: 20px;
-  margin-right: 10px;
-  font-size: 16px;
-}
-
-.message-input input:focus {
-  outline: none;
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
-}
-
-.message-input button {
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.3s ease;
-}
-
-.message-input button:hover {
-  background-color: #45a049;
+.read-the-docs {
+  color: #888;
 }

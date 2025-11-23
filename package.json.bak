@@ -1,0 +1,16 @@
+{
+  "name": "emotional-ai",
+  "version": "1.0.0",
+  "description": "An emotional AI assistant.",
+  "main": "backend/index.js",
+  "scripts": {
+    "start": "node emotional-ai/backend/index.js",
+    "heroku-postbuild": "npm install --prefix emotional-ai/backend && npm install --prefix emotional-ai/frontend && npm run build --prefix emotional-ai/frontend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "face-api.js": "^0.22.2"
+  }
+}

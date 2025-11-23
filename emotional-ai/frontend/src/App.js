@@ -79,8 +79,11 @@ function App() {
       },
       body: JSON.stringify({ message, emotion: currentEmotion }),
     });
-    const data = await response.json();
-    setAiResponse(data.reply);
+    const reportData = await response.json();
+    setAiResponse(reportData.fullReport); // Display the combined full report
+
+    // For debugging, you might want to log the full report object
+    console.log("Personal Analysis Report:", reportData); 
   };
 
   return (
@@ -106,7 +109,12 @@ function App() {
             placeholder="Talk to the AI..."
           />
           <button onClick={handleSendMessage}>Send</button>
-          {aiResponse && <p>AI: {aiResponse}</p>}
+          {aiResponse && (
+            <div className="analysis-report">
+              <h3>Personal Analysis Report:</h3>
+              <p>{aiResponse}</p>
+            </div>
+          )}
         </div>
       </header>
     </div>

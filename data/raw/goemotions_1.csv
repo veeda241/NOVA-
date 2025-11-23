@@ -1,0 +1,5 @@
+text,admiration,amusement,anger,annoyance,approval,disappointment,disgust,excitement,fear,gratitude,grief,joy,love,optimism,pride,realization,relief,remorse,sadness,surprise,neutral
+I am happy today.,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0
+This is so sad.,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0
+I feel angry.,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+I am surprised!,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0
