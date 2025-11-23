@@ -26,7 +26,7 @@ app.post('/chat', async (req, res) => {
 
     const data = await response.json();
     // The Python backend already returns structured data, so we can directly send it
-    res.json({ message: "Analysis complete", analysisData: data }); 
+    res.json(data); 
 
   } catch (error) {
     console.error('Error communicating with Python LLM backend:', error);
