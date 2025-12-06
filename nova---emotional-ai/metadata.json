@@ -1,0 +1,8 @@
+{
+  "name": "NOVA - Emotional AI",
+  "description": "An empathetic AI assistant modeled on EmpatheticDialogues and GoEmotions, capable of detecting and responding to human emotions via text, vision, and voice.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

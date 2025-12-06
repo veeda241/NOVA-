@@ -77,7 +77,7 @@ def initialize_components():
     logging.info("Components initialized successfully.")
     return memory, planner, safety_checker, output_handler
 
-def simulate_input_processing(text_input, audio_path=None, image_path=None, text_encoder_model=None, audio_encoder_model=None, vision_encoder_model=None):
+def simulate_input_processing(text_input, audio_path=None, image_data=None, text_encoder_model=None, audio_encoder_model=None, vision_encoder_model=None):
     """Simulates multimodal input processing."""
     logging.info(f"Processing user input: '{text_input}'")
 
@@ -102,17 +102,21 @@ def simulate_input_processing(text_input, audio_path=None, image_path=None, text
                 mel_spec = np.pad(mel_spec, ((0,0),(0,0),(0,pad_width),(0,0)), mode='constant')
             audio_embedding = get_audio_embeddings_cnn_model(audio_encoder_model, mel_spec)
         else:
-            audio_embedding = np.random.rand(1, AUDIO_EMBEDDING_DIM).astype(np.float32)
+            # Use zeros for missing audio to avoid adding random noise to the fusion
+            audio_embedding = np.zeros((1, AUDIO_EMBEDDING_DIM), dtype=np.float32)
     else:
-        audio_embedding = np.random.rand(1, AUDIO_EMBEDDING_DIM).astype(np.float32)
+        audio_embedding = np.zeros((1, AUDIO_EMBEDDING_DIM), dtype=np.float32)
     logging.debug(f"Audio embedding shape: {audio_embedding.shape}")
 
-    # Vision Processing (Placeholder)
-    if image_path and os.path.exists(image_path):
-        image_data = np.random.rand(1, IMG_HEIGHT_VISION, IMG_WIDTH_VISION, IMG_CHANNELS_VISION).astype(np.float32)
-        vision_embedding = get_vision_embeddings(vision_encoder_model, image_data)
+    # Vision Processing (Real)
+    if image_data is not None:
+        # Assuming image_data is already preprocessed (resized and normalized) from app.py
+        # Add batch dimension
+        processed_image = np.expand_dims(image_data, axis=0)
+        vision_embedding = get_vision_embeddings(vision_encoder_model, processed_image)
     else:
-        vision_embedding = np.random.rand(1, VISION_EMBEDDING_DIM).astype(np.float32)
+        # Use zeros for missing vision to avoid adding random noise
+        vision_embedding = np.zeros((1, VISION_EMBEDDING_DIM), dtype=np.float32)
     logging.debug(f"Vision embedding shape: {vision_embedding.shape}")
     
     return text_embedding, audio_embedding, vision_embedding
@@ -178,6 +182,7 @@ def main_orchestrator():
 
         # 6. Generate Empathetic Response
         empathetic_response_text = planner.generate_empathetic_response(
+            user_input_text=user_input_text,
             current_emotion_probabilities=emotion_probabilities,
             conversation_context_vector=weighted_context_vector
         )

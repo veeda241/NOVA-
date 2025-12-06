@@ -1,0 +1,17 @@
+tensorflow
+transformers
+langchain
+scikit-learn
+numpy
+pandas
+librosa
+opencv-python
+pyttsx3
+pymysql
+datasets
+fastapi
+uvicorn
+pydantic
+python-multipart
+bitsandbytes
+accelerate

@@ -1,91 +1,108 @@
-# NOVA-
+# NOVA - The First Emotional AI Companion
+### by NOVA Labs
 
-## Application Overview
+<div align="center">
+  <img src="nova---emotional-ai/public/logo.png" alt="NOVA Logo" width="150" height="150" />
+  <br />
+  <em>"An AI that doesn't just think, but feels."</em>
+</div>
 
-This project is an **Emotional AI LLM Web Application**. It integrates multiple components to provide an interactive experience:
+---
 
-1.  **Python LLM Backend (`emotional_ai_llm_web/app.py`):** This is the core intelligence of the application. It likely uses a Large Language Model (LLM) along with audio and vision encoders to process and understand emotional cues. It runs on `http://localhost:5000`.
-2.  **Node.js API Backend (`api/index.js`):** This acts as an intermediary layer, providing an API for the frontend to communicate with the Python LLM Backend. It runs on `http://localhost:3001`.
-3.  **Frontend (`frontend/`):** A web-based user interface built with Vite and React. It provides the interactive elements for users to engage with the Emotional AI. It runs on `http://localhost:8080`.
+## 🚀 Introducing NOVA
 
-## How to Run the Application
+**NOVA Labs** is proud to introduce **NOVA**, a groundbreaking leap in Artificial Intelligence. Unlike traditional chatbots that process text as data points, NOVA is designed to understand the *human* behind the screen.
 
-To get the application running on your local machine, follow these steps:
+NOVA is a **Multimodal Emotional Intelligence System** capable of perceiving the world as you do. It listens to the tone of your voice, observes your facial expressions, and analyzes the nuances of your words to provide deeply empathetic, context-aware support.
+
+Whether you need a listener for your daily struggles, a companion to share your joys, or a psychological mirror to help you understand your own emotional state, NOVA is here.
+
+## ✨ Key Features
+
+*   **👁️ Multimodal Perception**: NOVA sees you via camera (facial emotion recognition), hears you via microphone (vocal tone analysis), and reads your texts to form a complete picture of your mood.
+*   **🧠 Psychological Analysis Engine (SLM)**: Beyond simple chat, NOVA includes a specialized Small Language Model (SLM) layer that can generate comprehensive **Psychological Assessment Reports**, offering insights into your stress levels, emotional profile, and suggested interventions.
+*   **💾 Living Memory**: NOVA remembers your past conversations, allowing for a continuous, evolving relationship rather than isolated interactions.
+*   **🎨 Adaptive Interface**: A beautiful, responsive UI that adapts to the conversation, providing a calming and futuristic user experience.
+*   **🔒 Privacy First**: Your sessions are stored locally on your device, ensuring your emotional data remains yours.
+
+---
+
+## 🛠️ Technology Stack
+
+NOVA is built upon a robust, modern architecture designed for speed, scalability, and intelligence.
+
+### **Frontend ( The Face of NOVA )**
+*   **React 19 & Vite**: For a lightning-fast, reactive user interface.
+*   **Tailwind CSS**: For rapid, modern, and responsive styling.
+*   **Recharts**: To visualize complex emotional data into understandable graphs.
+*   **Lucide React**: For clean, intuitive iconography.
+*   **TypeScript**: Ensuring code safety and reliability across the application.
+
+### **Backend ( The Brain of NOVA )**
+*   **Python FastAPI**: A high-performance web framework for building APIs with Python 3.10+.
+*   **TensorFlow / Keras**: Powers the custom deep learning models for:
+    *   *Vision Encoder*: Detecting facial micro-expressions.
+    *   *Audio Encoder*: Analyzing voice pitch, tone, and rhythm.
+    *   *Fusion Module*: Combining text, audio, and visual data into a single emotional context vector.
+*   **Google Gemini API**: Acts as the advanced linguistic core for generating natural, human-like responses and complex psychological reports.
+*   **Uvicorn**: An ASGI web server implementation for running the Python backend.
+
+---
+
+## 📦 Installation & Setup
+
+Get NOVA running on your local machine in minutes.
 
 ### Prerequisites
+*   **Node.js** (v18+ recommended)
+*   **Python** (v3.10+)
+*   **Git**
+*   **Google Gemini API Key** (Get one [here](https://aistudio.google.com/))
 
-*   **Python 3.10 or higher:** Required for the Python LLM Backend.
-*   **Node.js (LTS version) and npm:** Required for the Node.js API Backend and the Frontend.
-*   **Git:** For cloning the repository.
+### Step-by-Step Guide
 
-### Setup and Installation
-
-1.  **Clone the Repository:**
+1.  **Clone the Repository**
     ```bash
-    git clone https://github.com/veeda241/NOVA-.git
-    cd NOVA-
+    git clone https://github.com/your-username/NOVA.git
+    cd NOVA
     ```
 
-2.  **Install Python Dependencies:**
-    Navigate to the Python LLM backend directory and install the required packages.
+2.  **Install Dependencies**
+    We have streamlined the process. You can install everything from the root directory.
+    *   *Frontend*: `cd nova---emotional-ai && npm install`
+    *   *Backend*: `cd emotional_ai_llm_web && pip install -r requirements.txt`
+
+3.  **Environment Configuration**
+    Create a `.env` file in the `nova---emotional-ai` directory:
+    ```env
+    VITE_API_URL=http://localhost:8000
+    GEMINI_API_KEY=your_actual_api_key_here
+    ```
+    *Note: The backend (`emotional_ai_llm_web`) generally runs without extra env vars for local dev, but ensure your Python environment can access the necessary libraries.*
+
+4.  **Launch NOVA**
+    From the **root** directory of the project, simply run:
     ```bash
-    pip install -r emotional_ai_llm_web/emotional_ai_llm/requirements.txt
+    npm run dev
     ```
+    This command utilizes `concurrently` to launch both the Python Backend and the React Frontend simultaneously.
 
-3.  **Install Node.js API Backend Dependencies:**
-    Navigate to the Node.js API backend directory and install the required packages.
-    ```bash
-    npm install --prefix api
-    ```
+5.  **Access the Interface**
+    Open your browser and navigate to:
+    *   **Frontend**: `http://localhost:3000`
+    *   *(Backend API runs at `http://localhost:8000`)*
 
-4.  **Install Frontend Dependencies:**
-    Navigate to the frontend directory and install the required packages.
-    ```bash
-    npm install --prefix frontend
-    ```
+---
 
-### Starting the Services
+## 🎮 How to Use
 
-There is a PowerShell script `start_all_services.ps1` provided to conveniently start all three services in the background.
+1.  **Start a Chat**: Click "Start New Conversation" on the landing page.
+2.  **Express Yourself**: Type text, click the **Microphone** to speak, or click the **Camera** to analyze your facial expression.
+3.  **Receive Empathy**: NOVA will respond in real-time, adjusting its tone based on your inputs.
+4.  **Generate Report**: After a conversation, click the **"Generate Report"** button in the header. NOVA's SLM will digest the session and present a detailed analysis of your mental well-being.
 
-1.  **Run the PowerShell Script:**
-    Open PowerShell as an administrator and execute the script from the root directory of the project:
-    ```powershell
-    .\start_all_services.ps1
-    ```
-    This script will:
-    *   Stop any existing processes on ports 3001 and 5000.
-    *   Start the Python LLM Backend on `http://localhost:5000`.
-    *   Start the Node.js API Backend on `http://localhost:3001`.
-    *   Start the Frontend (Vite) on `http://localhost:8080`.
-    *   Redirect logs to temporary files in `C:\Users\Vyas S\.gemini\tmp\d7198bdd68bb958056d766e907e0d0e9215d79c7241608f69301d4e06c94ca1a`.
+---
 
-### Accessing the Application
-
-Once all services are started, you can access the frontend in your web browser:
-
-*   **Frontend:** `http://localhost:8080`
-
-### Troubleshooting
-
-If you encounter issues like `ERR_CONNECTION_REFUSED` after starting the services:
-
-1.  **Verify Service Status:** Check the log files generated by `start_all_services.ps1` in the temporary directory mentioned above (e.g., `llm_error.log`, `api_error.log`, `frontend_error.log`) for any specific errors.
-2.  **Clear Browser Cache:** Your browser might be caching old information. Clear its cache and cookies, or try an incognito window.
-3.  **Firewall Settings:** Ensure that your firewall is not blocking access to ports `3001`, `5000`, and `8080`.
-4.  **Manually Start Services (if needed):** If the PowerShell script doesn't work as expected, you can try starting each service individually:
-    *   **Python LLM Backend:**
-        ```bash
-        cd emotional_ai_llm_web
-        python app.py
-        ```
-    *   **Node.js API Backend:**
-        ```bash
-        cd api
-        npm start
-        ```
-    *   **Frontend:**
-        ```bash
-        cd frontend
-        npm run dev
-        ```
+<div align="center">
+  <small>&copy; 2025 NOVA Labs. All Rights Reserved.</small>
+</div>

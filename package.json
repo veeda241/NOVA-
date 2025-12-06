@@ -14,7 +14,9 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "concurrently \"npm:start --prefix api\" \"npm:dev --prefix frontend\""
+    "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd emotional_ai_llm_web && python -m uvicorn fastapi_app:app --reload --port 8000",
+    "start:frontend": "cd nova---emotional-ai && npm run dev"
   },
   "repository": {
     "type": "git",

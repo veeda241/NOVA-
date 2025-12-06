@@ -7,15 +7,19 @@ app.use(cors());
 app.use(express.json());
 
 app.post('/chat', async (req, res) => {
-  const userMessage = req.body.message;
+  // Forward the full body to the Python backend
+  // The Python backend expects { text, emotion, image }
+  // The frontend should send exactly that structure (or we map it here if frontend sends 'message')
   
+  const payload = req.body.message ? { text: req.body.message, ...req.body } : req.body;
+
   try {
     const response = await fetch('http://localhost:5000/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text: userMessage }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

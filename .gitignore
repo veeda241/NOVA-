@@ -1,9 +1,38 @@
-# Dependencies
-node_modules/
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Build files
-/emotional-ai/frontend/build
+node_modules
+dist
+dist-ssr
+*.local
 
-# Temporary files
-/C:/temp/
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Large Models
+emotional_ai_llm_web/emotional_ai_llm/fine_tuned_empathetic_t5/
+models/
+*.keras
+*.tflite
+*.safetensors
+*.pt
+*.pth
+*.bin
+
+# venv
+.venv
+emotional_ai_llm_web/.venv

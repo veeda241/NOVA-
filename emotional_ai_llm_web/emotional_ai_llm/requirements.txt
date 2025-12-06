@@ -8,3 +8,6 @@ librosa
 opencv-python
 pyttsx3
 pymysql
+datasets
+fastapi
+uvicorn

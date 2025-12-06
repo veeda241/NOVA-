@@ -1,0 +1,42 @@
+services:
+  # Backend Service (Python FastAPI)
+  - type: web
+    name: nova-backend
+    env: python
+    plan: free
+    rootDir: emotional_ai_llm_web
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn fastapi_app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false  # User must provide this in Dashboard
+      - key: TF_ENABLE_ONEDNN_OPTS
+        value: 0
+
+  # Frontend Service (React Static Site)
+  - type: static
+    name: nova-frontend
+    env: node
+    plan: free
+    rootDir: nova---emotional-ai
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: nova-backend
+          property: url
+        # Append /chat to the backend URL in the code or here? 
+        # The code does `LOCAL_API_URL = ...` and expects the full endpoint if not default.
+        # Wait, geminiService.ts says: `VITE_API_URL || "http://localhost:8000/chat"`
+        # The backend URL from Render will be just the base URL (e.g. https://nova-backend.onrender.com)
+        # So VITE_API_URL should ideally include /chat or the code should append it.
+        # Let's check the code replacement I just made.
+        # It replaces `const LOCAL_API_URL = ...`.
+        # If I set VITE_API_URL to `https://.../chat` it works.
+        # But Render's `fromService` property `url` gives the root.
+        # I can't easily append string in render.yaml env var value for `fromService`.
+        # I should probably update the code to append `/chat` if it's missing or assume base URL.
+        # But for now, let's stick to manual env var entry on dashboard if needed, 
+        # OR better, let's update the code to append `/chat` so I can just pass the base URL.
