@@ -14,7 +14,7 @@ services:
         value: 0
 
   # Frontend Service (React Static Site)
-  - type: static
+  - type: static_site
     name: nova-frontend
     env: node
     plan: free
