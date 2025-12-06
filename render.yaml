@@ -13,14 +13,14 @@ services:
       - key: TF_ENABLE_ONEDNN_OPTS
         value: 0
 
-  # Frontend Service (React Static Site)
-  - type: static_site
+  # Frontend Service (React Static Site - deployed as Web Service workaround)
+  - type: web
     name: nova-frontend
     env: node
     plan: free
     rootDir: nova---emotional-ai
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
+    buildCommand: npm install && npm run build && npm install -g serve
+    startCommand: serve -s dist -l $PORT
     envVars:
       - key: VITE_API_URL
         fromService:
