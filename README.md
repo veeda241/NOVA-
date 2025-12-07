@@ -2,7 +2,7 @@
 ### by NOVA Labs
 
 <div align="center">
-  <img src="nova---emotional-ai/public/logo.png" alt="NOVA Logo" width="150" height="150" />
+  <img src="client/public/logo.png" alt="NOVA Logo" width="150" height="150" />
   <br />
   <em>"An AI that doesn't just think, but feels."</em>
 </div>
@@ -69,11 +69,11 @@ Get NOVA running on your local machine in minutes.
 
 2.  **Install Dependencies**
     We have streamlined the process. You can install everything from the root directory.
-    *   *Frontend*: `cd nova---emotional-ai && npm install`
-    *   *Backend*: `cd emotional_ai_llm_web && pip install -r requirements.txt`
+    *   *Frontend*: `cd client && npm install`
+    *   *Backend*: `cd server && pip install -r requirements.txt`
 
 3.  **Environment Configuration**
-    Create a `.env` file in the `nova---emotional-ai` directory:
+    Create a `.env` file in the `client` directory:
     ```env
     VITE_API_URL=http://localhost:8000
     GEMINI_API_KEY=your_actual_api_key_here
@@ -89,7 +89,7 @@ Get NOVA running on your local machine in minutes.
 
 5.  **Access the Interface**
     Open your browser and navigate to:
-    *   **Frontend**: `http://localhost:3000`
+    *   **Frontend**: `http://localhost:5173`
     *   *(Backend API runs at `http://localhost:8000`)*
 
 ---

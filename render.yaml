@@ -4,7 +4,7 @@ services:
     name: nova-backend
     env: python
     plan: free
-    rootDir: emotional_ai_llm_web
+    rootDir: server
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn fastapi_app:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -18,7 +18,7 @@ services:
     name: nova-frontend
     env: node
     plan: free
-    rootDir: nova---emotional-ai
+    rootDir: client
     # Install dependencies, build, and then install 'serve' to run the static files
     buildCommand: npm install && npm run build && npm install -g serve
     # Serve the 'dist' folder on the port provided by Render

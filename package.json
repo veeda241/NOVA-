@@ -1,31 +1,21 @@
 {
-  "name": "nova-",
+  "name": "nova-emotional-ai",
   "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
-  "dependencies": {
-    "face-api.js": "^0.22.2",
-    "node-fetch": "^2.1.2",
-    "seedrandom": "^2.4.3",
-    "tslib": "^1.14.1"
+  "description": "NOVA Emotional AI System",
+  "scripts": {
+    "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd server && python -m uvicorn fastapi_app:app --reload --port 8000",
+    "start:frontend": "cd client && npm run dev"
   },
+  "dependencies": {},
   "devDependencies": {
     "concurrently": "^9.2.1"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
-    "start:backend": "cd emotional_ai_llm_web && python -m uvicorn fastapi_app:app --reload --port 8000",
-    "start:frontend": "cd nova---emotional-ai && npm run dev"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/veeda241/NOVA-.git"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/veeda241/NOVA-/issues"
   },

@@ -1,17 +1,18 @@
 # Start Python Backend
 Write-Host "Starting Python Backend..."
 $venvPath = ".venv\Scripts\Activate.ps1"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "& '$venvPath'; cd emotional_ai_llm_web; python -m uvicorn fastapi_app:app --port 5000 --reload"
 
-# Start Node Proxy
-Write-Host "Starting Node Proxy..."
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd api; npm start"
+if (Test-Path $venvPath) {
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "& '$venvPath'; cd server; python -m uvicorn fastapi_app:app --port 8000 --reload"
+} else {
+    Write-Host "Virtual environment not found at $venvPath. Attempting to run with system python..."
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd server; python -m uvicorn fastapi_app:app --port 8000 --reload"
+}
 
 # Start Frontend
 Write-Host "Starting Frontend..."
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd client; npm run dev"
 
-Write-Host "All services started. Please wait for them to initialize."
+Write-Host "All services started."
 Write-Host "Frontend: http://localhost:5173"
-Write-Host "Backend Proxy: http://localhost:3001"
-Write-Host "Python API: http://localhost:5000"
+Write-Host "Backend: http://localhost:8000"
