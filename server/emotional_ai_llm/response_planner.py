@@ -19,9 +19,14 @@ class ResponsePlanner:
         self.model_name = "facebook/blenderbot-400M-distill"
 
         logging.info(f"Loading Chat SLM: {self.model_name}")
+        
+        # Determine device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logging.info(f"Chat SLM will run on device: {self.device}")
+
         try:
             self.tokenizer = BlenderbotTokenizer.from_pretrained(self.model_name)
-            self.model = BlenderbotForConditionalGeneration.from_pretrained(self.model_name)
+            self.model = BlenderbotForConditionalGeneration.from_pretrained(self.model_name).to(self.device)
             logging.info("Chat SLM loaded successfully.")
         except Exception as e:
             logging.error(f"Failed to load Chat SLM: {e}")
@@ -127,7 +132,7 @@ class ResponsePlanner:
                 augmented_input = f"I feel {primary_emotion}. {user_input_text}"
                 logging.info(f"Augmented Input for Chat SLM: '{augmented_input}'")
 
-            inputs = self.tokenizer([augmented_input], return_tensors="pt")
+            inputs = self.tokenizer([augmented_input], return_tensors="pt").to(self.device)
             
             reply_ids = self.model.generate(
                 **inputs,

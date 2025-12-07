@@ -1,17 +1,24 @@
 from transformers import pipeline
 import logging
+import torch
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class TextEmotionAnalyzer:
     def __init__(self):
         logging.info("Loading NLP-based emotion analysis pipeline...")
+        
+        # Determine device for pipeline (0 is GPU, -1 is CPU)
+        device = 0 if torch.cuda.is_available() else -1
+        logging.info(f"NLP emotion pipeline will run on device index: {device} ({'GPU' if device == 0 else 'CPU'})")
+
         try:
             # Use a small, fast model for emotion detection
             self.nlp_pipeline = pipeline(
                 "text-classification", 
                 model="j-hartmann/emotion-english-distilroberta-base", 
-                top_k=None # Return all scores
+                top_k=None, # Return all scores
+                device=device
             )
             logging.info("NLP emotion pipeline loaded successfully.")
         except Exception as e:

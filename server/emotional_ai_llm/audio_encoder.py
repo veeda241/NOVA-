@@ -29,7 +29,7 @@ def build_audio_cnn_encoder(num_labels):
         layers.BatchNormalization(),
         layers.MaxPooling2D(POOL_SIZE),
         layers.Flatten(),
-        layers.Dense(128, activation='relu'),
+        layers.Dense(128, activation='relu', name='audio_embedding'),
         layers.Dropout(0.5),
         layers.Dense(num_labels, activation='sigmoid') # Sigmoid for multi-label classification
     ])
@@ -59,11 +59,10 @@ def train_audio_encoder(model, train_mel_spectrograms, train_labels, val_mel_spe
 def get_audio_embeddings_cnn_model(model, mel_spectrograms):
     """
     Generates embeddings for input mel-spectrograms using the CNN model.
-    We'll use the output of the last Dense layer before the classification head as embeddings.
+    We'll use the output of the 'audio_embedding' layer.
     """
-    # Create a sub-model that outputs the layer before the classification head
-    # (i.e., the Dense layer with 128 units)
-    embedding_model = Model(inputs=model.inputs, outputs=model.layers[-2].output) # -2 for the Dense(128) layer
+    # Create a sub-model that outputs the embedding layer
+    embedding_model = Model(inputs=model.inputs, outputs=model.get_layer('audio_embedding').output)
     embeddings = embedding_model.predict(mel_spectrograms)
     print(f"Generated audio embeddings from CNN model. Shape: {embeddings.shape}")
     return embeddings

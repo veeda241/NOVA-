@@ -44,7 +44,7 @@ def build_mobilenet_vision_encoder(num_labels):
     x = base_model(x, training=False) # Ensure base model runs in inference mode
     x = layers.GlobalAveragePooling2D()(x)
     x = layers.Dropout(0.5)(x)
-    x = layers.Dense(128, activation='relu')(x) # Embedding layer
+    x = layers.Dense(128, activation='relu', name='vision_embedding')(x) # Embedding layer
     x = layers.Dropout(0.5)(x)
     outputs = layers.Dense(num_labels, activation='sigmoid')(x) # Sigmoid for multi-label classification
 
@@ -75,10 +75,19 @@ def train_vision_encoder(model, train_images, train_labels, val_images, val_labe
 def get_vision_embeddings(model, images):
     """
     Generates embeddings for input images using the vision encoder model.
-    We'll use the output of the Dense layer before the classification head as embeddings.
+    We'll use the output of the 'vision_embedding' layer.
     """
-    # Create a sub-model that outputs the Dense(128) layer's output
-    embedding_model = Model(inputs=model.inputs, outputs=model.layers[-2].output) # -2 for the Dense(128) layer
+    # Create a sub-model that outputs the embedding layer
+    try:
+        output_layer = model.get_layer('vision_embedding').output
+    except ValueError:
+        # Fallback for models saved without the custom layer name
+        # The error message indicated the layers are: ..., 'dense', 'dropout_1', 'dense_1'
+        # 'dense' corresponds to the 128-unit embedding layer in the architecture.
+        print("Warning: 'vision_embedding' layer not found. Falling back to 'dense' layer.")
+        output_layer = model.get_layer('dense').output
+
+    embedding_model = Model(inputs=model.inputs, outputs=output_layer)
     embeddings = embedding_model.predict(images)
     print(f"Generated vision embeddings. Shape: {embeddings.shape}")
     return embeddings

@@ -1,6 +1,7 @@
 import sys
 import os
 import logging
+import tempfile
 from contextlib import asynccontextmanager
 from typing import Optional, Any, List
 
@@ -81,6 +82,7 @@ class ChatRequest(BaseModel):
     text: str
     emotion: str = "neutral"
     image: Optional[str] = None # Base64 encoded image
+    audio: Optional[str] = None # Base64 encoded audio
 
 class AnalysisData(BaseModel):
     moodScore: float
@@ -165,13 +167,42 @@ async def chat(request_data: ChatRequest):
             )
         )
 
-    text_emb, audio_emb, vision_emb = simulate_input_processing(
-        user_input_text, 
-        text_encoder_model=text_encoder_model, 
-        audio_encoder_model=audio_encoder_model, 
-        vision_encoder_model=vision_encoder_model,
-        image_data=image_input_processed
-    )
+    # Audio Processing
+    audio_base64 = request_data.audio
+    audio_temp_path = None
+    
+    if audio_base64:
+        try:
+            if "base64," in audio_base64:
+                _, audio_base64 = audio_base64.split("base64,", 1)
+            
+            audio_bytes = base64.b64decode(audio_base64)
+            # Create a temp file. We explicitly do not delete on close so we can pass path.
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                tmp.write(audio_bytes)
+                audio_temp_path = tmp.name
+            logging.info("Audio data successfully decoded and saved to temp file.")
+        except Exception as e:
+            logging.error(f"Error decoding or processing audio: {e}")
+            audio_temp_path = None
+
+    try:
+        text_emb, audio_emb, vision_emb = simulate_input_processing(
+            user_input_text, 
+            text_encoder_model=text_encoder_model, 
+            audio_encoder_model=audio_encoder_model, 
+            vision_encoder_model=vision_encoder_model,
+            image_data=image_input_processed,
+            audio_path=audio_temp_path
+        )
+    finally:
+        # Clean up temp file
+        if audio_temp_path and os.path.exists(audio_temp_path):
+            try:
+                os.remove(audio_temp_path)
+            except Exception as e:
+                logging.error(f"Error removing temp audio file: {e}")
+
     logging.debug("Multimodal embeddings generated.")
 
     fused_embedding_input = {

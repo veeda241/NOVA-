@@ -56,6 +56,20 @@ text_encoder_model, audio_encoder_model, vision_encoder_model, fusion_model = No
 def load_all_models():
     """Loads all trained Keras models."""
     logging.info("Loading models...")
+    
+    # Check for GPU availability for TensorFlow
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        logging.info(f"TensorFlow detected {len(gpus)} GPU(s): {gpus}")
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logging.info("Memory growth enabled for GPUs.")
+        except RuntimeError as e:
+            logging.error(f"Error setting memory growth: {e}")
+    else:
+        logging.info("TensorFlow did not detect any GPUs. Running on CPU.")
+
     try:
         text_encoder_model = tf.keras.models.load_model(TEXT_ENCODER_MODEL_PATH)
         audio_encoder_model = tf.keras.models.load_model(AUDIO_ENCODER_MODEL_PATH)

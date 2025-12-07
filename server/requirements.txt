@@ -7,7 +7,6 @@ pandas
 librosa
 opencv-python
 pyttsx3
-pymysql
 datasets
 fastapi
 uvicorn
@@ -15,3 +14,6 @@ pydantic
 python-multipart
 bitsandbytes
 accelerate
+torch
+Pillow
+matplotlib

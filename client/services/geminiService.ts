@@ -115,12 +115,11 @@ export const sendMessageToLocalNova = async (
         const payload: any = {
             text: text,
             emotion: "neutral", // Client-side initial guess or placeholder
-            image: imageBase64 // Send base64 directly
+            image: imageBase64, // Send base64 directly
+            audio: audioBase64  // Send base64 audio
         };
         
-        // Note: The Python backend as read doesn't explicitly show an 'audio' field in ChatRequest, 
-        // but it simulates audio processing in 'simulate_input_processing'. 
-        // For now, we'll send text and image which are explicitly typed.
+        // Note: The Python backend now accepts an 'audio' field in ChatRequest.
         
         const response = await fetch(LOCAL_API_URL, {
             method: 'POST',
