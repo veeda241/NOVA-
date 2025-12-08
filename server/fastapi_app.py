@@ -5,6 +5,11 @@ import tempfile
 from contextlib import asynccontextmanager
 from typing import Optional, Any, List
 
+import tensorflow as tf
+
+# Explicitly set TensorFlow to use only CPU
+tf.config.set_visible_devices([], 'GPU')
+
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel

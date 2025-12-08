@@ -4,7 +4,7 @@
   "description": "NOVA Emotional AI System",
   "scripts": {
     "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
-    "start:backend": "cd server && python -m uvicorn fastapi_app:app --reload --port 8000",
+    "start:backend": "cd server && python -m uvicorn fastapi_app:app --reload --port 8001",
     "start:frontend": "cd client && npm run dev"
   },
   "dependencies": {},

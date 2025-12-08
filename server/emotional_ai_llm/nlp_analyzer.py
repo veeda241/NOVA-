@@ -9,8 +9,9 @@ class TextEmotionAnalyzer:
         logging.info("Loading NLP-based emotion analysis pipeline...")
         
         # Determine device for pipeline (0 is GPU, -1 is CPU)
-        device = 0 if torch.cuda.is_available() else -1
-        logging.info(f"NLP emotion pipeline will run on device index: {device} ({'GPU' if device == 0 else 'CPU'})")
+        # Forcing CPU usage as requested by the user
+        device = -1 
+        logging.info(f"NLP emotion pipeline will run on device index: {device} (CPU)")
 
         try:
             # Use a small, fast model for emotion detection

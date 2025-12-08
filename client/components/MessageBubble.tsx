@@ -14,8 +14,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       <div className={`flex max-w-[80%] md:max-w-[70%] ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-3`}>
         
         {/* Avatar */}
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isUser ? 'bg-indigo-600' : 'bg-rose-500'}`}>
-          {isUser ? <User size={16} className="text-white" /> : <Bot size={16} className="text-white" />}
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden ${isUser ? 'bg-indigo-600' : 'bg-slate-800 border border-slate-700'}`}>
+          {isUser ? (
+            <User size={16} className="text-white" />
+          ) : (
+            <img src="/nova-logo.svg" alt="NOVA" className="w-full h-full object-contain p-1" />
+          )}
         </div>
 
         {/* Content */}

@@ -3,6 +3,7 @@ services:
   - type: web
     name: nova-backend
     env: python
+    pythonVersion: 3.10.13
     plan: free
     rootDir: server
     buildCommand: pip install -r requirements.txt

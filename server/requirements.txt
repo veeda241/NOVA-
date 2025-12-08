@@ -1,8 +1,8 @@
-tensorflow
+tensorflow>=2.16.1
 transformers
 langchain
 scikit-learn
-numpy
+numpy<2.0.0
 pandas
 librosa
 opencv-python
