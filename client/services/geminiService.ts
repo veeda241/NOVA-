@@ -4,7 +4,7 @@ import { NovaResponse, AnalysisReport, Message } from "../types";
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 // If env var exists, append /chat, otherwise use default local endpoint
-const LOCAL_API_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/chat` : "http://localhost:8001/chat";
+const LOCAL_API_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/chat` : "http://localhost:8000/chat";
 
 const MODEL_NAME = "gemini-2.5-flash";
 
