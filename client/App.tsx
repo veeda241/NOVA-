@@ -151,8 +151,16 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
+      // Build conversation history for the local LLM (exclude welcome + current msg)
+      const history = updatedMessages.slice(0, -1)
+        .filter(m => m.id !== 'welcome' && m.text.trim())
+        .map(m => ({
+          role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+          content: m.text,
+        }));
+
       // Use Local Backend (Multimodal) first, with automatic fallback to Gemini handled in service
-      const data: NovaResponse = await sendMessageToLocalNova(text, image, audio);
+      const data: NovaResponse = await sendMessageToLocalNova(text, image, audio, history);
       
       const botMsg: Message = {
         id: (Date.now() + 1).toString(),

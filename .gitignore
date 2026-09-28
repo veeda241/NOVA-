@@ -24,7 +24,7 @@ dist-ssr
 *.sw?
 
 # Large Models
-emotional_ai_llm_web/emotional_ai_llm/fine_tuned_empathetic_t5/
+server/emotional_ai_llm/fine_tuned_empathetic_t5/
 models/
 *.keras
 *.tflite
@@ -32,7 +32,15 @@ models/
 *.pt
 *.pth
 *.bin
+*.gguf
 
 # venv
 .venv
 emotional_ai_llm_web/.venv
+
+# Python
+__pycache__/
+*.pyc
+
+# Local env files
+.env

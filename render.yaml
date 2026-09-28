@@ -1,31 +1,62 @@
+# Render Blueprint for NOVA (cloud deploy)
+#
+# Architecture on Render (free plan: chat-only):
+#   - Chat/report brain : Groq API (the local Ollama server isn't reachable in the cloud)
+#   - Emotion models    : disabled to fit the 512MB free plan. To run all 3 HF modalities
+#                         (text / face / voice), switch nova-backend to plan: standard
+#                         (~2GB RAM) and set the ENABLE_*_EMOTION vars to "true".
+#   - Frontend          : Vite build served as a small Node web service (free plan)
+#
+# After the first deploy:
+#   1. Set GROQ_API_KEY on nova-backend (https://console.groq.com/keys - free)
+#   2. Set VITE_API_URL on nova-frontend to the backend URL, then redeploy the frontend
+#
+# Local development stays 100% local: Ollama + Unsloth GGUF (no API key needed).
+
 services:
-  # Backend Service (Python FastAPI)
+  # ---------------- Backend (FastAPI) ----------------
   - type: web
     name: nova-backend
-    env: python
-    pythonVersion: 3.10.13
-    plan: free
+    runtime: python
+    plan: free                  # 512MB: fits the FastAPI + Groq brain only (see emotion toggles below)
     rootDir: server
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn fastapi_app:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn fastapi_app:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120
+    healthCheckPath: /health
     envVars:
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: TF_ENABLE_ONEDNN_OPTS
-        value: "0"
+      # render.yaml has no pythonVersion field; Render selects the interpreter from this env var
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: LLM_PROVIDER
+        value: groq                 # force Groq on Render (no Ollama in the cloud)
+      - key: GROQ_API_KEY
+        sync: false                 # set in Render dashboard: https://console.groq.com/keys
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant # Groq decommissioned the Llama-3.2 3B models
+      # The HF emotion models need ~2GB of RAM, so they stay off on the free tier:
+      # emotion analysis degrades to a neutral baseline, chat + reports keep working.
+      - key: ENABLE_TEXT_EMOTION
+        value: "false"
+      - key: ENABLE_VISION_EMOTION
+        value: "false"
+      - key: ENABLE_AUDIO_EMOTION
+        value: "false"
+      - key: PYTHONUNBUFFERED
+        value: "1"
 
-  # Frontend Service (React Static Site - deployed as Web Service)
+  # ---------------- Frontend (Vite build served via `serve`) ----------------
   - type: web
     name: nova-frontend
-    env: node
+    runtime: node
     plan: free
     rootDir: client
-    # Install dependencies, build, and then install 'serve' to run the static files
     buildCommand: npm install && npm run build && npm install -g serve
-    # Serve the 'dist' folder on the port provided by Render
     startCommand: serve -s dist -l $PORT
     envVars:
       - key: VITE_API_URL
         sync: false
-        # Instruction: After deployment, copy the URL of nova-backend (e.g., https://nova-backend.onrender.com) 
-        # and set this variable in the Dashboard, then manually trigger a deploy of the frontend.
+        # Set this to the backend URL (e.g. https://nova-backend-xxxx.onrender.com)
+        # BEFORE building, then redeploy the frontend - Vite bakes it in at build time.
+      - key: GEMINI_API_KEY
+        sync: false
+        # Optional: only used as a client-side fallback if the backend is unreachable.

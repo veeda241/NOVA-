@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import {
   Scene,
   OrthographicCamera,
@@ -244,7 +245,7 @@ export default function FloatingLines({
   mouseDamping = 0.05,
   parallax = true,
   parallaxStrength = 0.2,
-  mixBlendMode = 'screen'
+  mixBlendMode = 'screen' as CSSProperties['mixBlendMode']
 }) {
   const containerRef = useRef(null);
   const targetMouseRef = useRef(new Vector2(-1000, -1000));

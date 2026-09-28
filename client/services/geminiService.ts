@@ -3,8 +3,11 @@ import { NovaResponse, AnalysisReport, Message } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
-// If env var exists, append /chat, otherwise use default local endpoint
-const LOCAL_API_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/chat` : "http://localhost:8000/chat";
+
+// If env var exists, use it, otherwise use default local endpoints
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const LOCAL_CHAT_URL = `${API_BASE}/chat`;
+const LOCAL_REPORT_URL = `${API_BASE}/report`;
 
 const MODEL_NAME = "gemini-2.5-flash";
 
@@ -44,111 +47,153 @@ Return a JSON object matching the AnalysisReport schema:
 - suggestedInterventions (string[]): A list of 3-5 actionable steps for the user.
 `;
 
+// --- Local history format for the NOVA backend ---
+interface LocalHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const toLocalHistory = (messages: Message[]): LocalHistoryMessage[] =>
+  messages
+    .filter(m => m.id !== 'welcome' && m.text.trim())
+    .map(m => ({
+      role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+      content: m.text,
+    }));
+
+// ===================== LOCAL-FIRST REPORT =====================
+/**
+ * Generates the psychological report from the LOCAL LLM (via FastAPI backend).
+ * Falls back to cloud Gemini only if the local backend is unreachable.
+ */
 export const generateAnalysisReport = async (messages: Message[]): Promise<AnalysisReport> => {
-    if (!apiKey) throw new Error("API Key is missing");
+  const history = toLocalHistory(messages);
 
-    // Filter out initial welcome message and only keep relevant content
-    const conversationText = messages
-        .filter(m => m.id !== 'welcome')
-        .map(m => `${m.role.toUpperCase()}: ${m.text} ${m.emotionAnalysis ? `[Emotion: ${m.emotionAnalysis.detected_emotion}]` : ''}`)
-        .join('\n');
+  // 1) Try the fully-local report engine first
+  try {
+    const response = await fetch(LOCAL_REPORT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history }),
+    });
 
-    const prompt = `Please analyze the following conversation history and generate a detailed psychological report:\n\n${conversationText}`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: MODEL_NAME,
-            contents: {
-                role: 'user',
-                parts: [{ text: prompt }]
-            },
-            config: {
-                systemInstruction: ANALYSIS_SYSTEM_INSTRUCTION,
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        timestamp: { type: Type.STRING },
-                        patientName: { type: Type.STRING },
-                        stressLevel: { type: Type.NUMBER },
-                        emotionalProfile: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    emotion: { type: Type.STRING },
-                                    score: { type: Type.NUMBER },
-                                    color: { type: Type.STRING }
-                                }
-                            }
-                        },
-                        rootCauseAnalysis: { type: Type.STRING },
-                        longTermStrategy: { type: Type.STRING },
-                        inputSummary: { type: Type.STRING },
-                        suggestedInterventions: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING }
-                        }
-                    },
-                    required: ["timestamp", "patientName", "stressLevel", "emotionalProfile", "rootCauseAnalysis", "longTermStrategy", "inputSummary", "suggestedInterventions"]
-                }
-            }
-        });
-
-        const text = response.text;
-        if (!text) throw new Error("No analysis generated");
-        return JSON.parse(text) as AnalysisReport;
-
-    } catch (error) {
-        console.error("Analysis Generation Error:", error);
-        throw error;
+    if (response.ok) {
+      const data = await response.json();
+      console.log("Report generated locally (Unsloth LLM).");
+      return data as AnalysisReport;
     }
+    console.warn(`Local report engine responded ${response.status}; falling back to Gemini...`);
+  } catch (error) {
+    console.warn("Local report engine unreachable; falling back to Gemini...", error);
+  }
+
+  // 2) Gemini fallback (requires API key)
+  if (!apiKey) throw new Error("Local report failed and no Gemini API key is configured");
+
+  const conversationText = history
+    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+    .join('\n');
+
+  const prompt = `Please analyze the following conversation history and generate a detailed psychological report:\n\n${conversationText}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: {
+        role: 'user',
+        parts: [{ text: prompt }]
+      },
+      config: {
+        systemInstruction: ANALYSIS_SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            timestamp: { type: Type.STRING },
+            patientName: { type: Type.STRING },
+            stressLevel: { type: Type.NUMBER },
+            emotionalProfile: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  emotion: { type: Type.STRING },
+                  score: { type: Type.NUMBER },
+                  color: { type: Type.STRING }
+                }
+              }
+            },
+            rootCauseAnalysis: { type: Type.STRING },
+            longTermStrategy: { type: Type.STRING },
+            inputSummary: { type: Type.STRING },
+            suggestedInterventions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ["timestamp", "patientName", "stressLevel", "emotionalProfile", "rootCauseAnalysis", "longTermStrategy", "inputSummary", "suggestedInterventions"]
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No analysis generated");
+    return JSON.parse(text) as AnalysisReport;
+
+  } catch (error) {
+    console.error("Analysis Generation Error:", error);
+    throw error;
+  }
 };
 
-// Interaction with Local Python Backend (Multimodal Fusion)
+// ===================== LOCAL-FIRST CHAT =====================
+/**
+ * Chat with NOVA via the local backend (multimodal fusion + local Unsloth LLM).
+ * Falls back to cloud Gemini only if the local backend is unreachable.
+ */
 export const sendMessageToLocalNova = async (
     text: string,
     imageBase64?: string,
-    audioBase64?: string // Currently backend might not handle raw audio base64 directly in the chat endpoint payload same way, but let's assume text/vision first
+    audioBase64?: string,
+    history: LocalHistoryMessage[] = []
 ): Promise<NovaResponse> => {
-    try {
-        const payload: any = {
-            text: text,
-            emotion: "neutral", // Client-side initial guess or placeholder
-            image: imageBase64, // Send base64 directly
-            audio: audioBase64  // Send base64 audio
-        };
-        
-        // Note: The Python backend now accepts an 'audio' field in ChatRequest.
-        
-        const response = await fetch(LOCAL_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
+  try {
+    const payload = {
+      text: text,
+      emotion: "neutral", // client-side initial guess; server refines via vision model
+      image: imageBase64,
+      audio: audioBase64,
+      history,
+    };
 
-        if (!response.ok) {
-            throw new Error(`Local Backend Error: ${response.statusText}`);
-        }
+    const response = await fetch(LOCAL_CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      // Generation on a local 3B model can take a few seconds
+      signal: AbortSignal.timeout(120000),
+    });
 
-        const data = await response.json();
-        
-        // Map Python backend response to NovaResponse
-        return {
-            response: data.response,
-            analysis: {
-                detected_emotion: data.dominant_emotions || "Neutral",
-                confidence: 0.85, // Mock confidence as backend returns dominant string
-                reasoning: data.suggested_actions ? data.suggested_actions.join(". ") : "Based on multimodal fusion analysis."
-            }
-        };
-
-    } catch (error) {
-        console.warn("Local Nova Backend unavailable, falling back to Cloud Gemini...", error);
-        return sendMessageToNova(text, imageBase64, audioBase64);
+    if (!response.ok) {
+      throw new Error(`Local Backend Error: ${response.status} ${response.statusText}`);
     }
+
+    const data = await response.json();
+
+    // Map Python backend response to NovaResponse
+    return {
+      response: data.response,
+      analysis: {
+        detected_emotion: data.dominant_emotions || "Neutral",
+        confidence: typeof data.confidence === 'number' ? data.confidence : 0.85,
+        reasoning: data.reasoning || "Based on local multimodal fusion analysis.",
+      }
+    };
+
+  } catch (error) {
+    console.warn("Local Nova Backend unavailable, falling back to Cloud Gemini...", error);
+    return sendMessageToNova(text, imageBase64, audioBase64);
+  }
 };
 
 export const sendMessageToNova = async (

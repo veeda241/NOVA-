@@ -1,19 +1,29 @@
-tensorflow>=2.16.1
-transformers
-langchain
-scikit-learn
-numpy<2.0.0
-pandas
-librosa
-opencv-python
-pyttsx3
-datasets
+# NOVA Backend requirements (fully local stack)
+
+# --- Web API ---
 fastapi
 uvicorn
 pydantic
 python-multipart
-bitsandbytes
-accelerate
-torch
+
+# --- Local LLM (Unsloth GGUF served via Ollama) ---
+requests          # talks to the local Ollama HTTP server
+
+# --- Pretrained emotion models (Hugging Face) ---
+torch>=2.5,<2.6    # CUDA build recommended; 2.6+ needs newer transformers
+transformers==4.51.3   # last line compatible with torch 2.5.x (.bin loading)
+accelerate==0.34.2     # compatible with torch 2.5.x
+soundfile         # audio decoding for the speech emotion model
+safetensors
+
+# --- Vision / audio utilities ---
+numpy<2.0.0
+opencv-python-headless   # headless build: no libGL/GUI deps (absent on Render's Linux image)
 Pillow
-matplotlib
+
+# --- Safety / logging ---
+# (stdlib only: re, json, datetime)
+
+# Removed vs. old stack:
+# tensorflow, librosa, pyttsx3, bitsandbytes, datasets, langchain,
+# scikit-learn, pandas, matplotlib  -> no longer needed at runtime

@@ -1,171 +1,112 @@
 # emotional_ai_llm/response_planner.py
+"""
+Generates NOVA's empathetic responses.
+
+The old implementation wrapped BlenderBot-400M output in canned therapist
+phrases. Now the ResponsePlanner prompts the local Unsloth LLM (via Ollama)
+with the fused emotion analysis, client-reported facial emotion and recent
+conversation history, so responses are genuinely contextual.
+"""
+
+import logging
 
 import numpy as np
-import random
-import logging
-from transformers import BlenderbotTokenizer, BlenderbotForConditionalGeneration
-import torch
-import os
+
+from emotional_ai_llm.config import EMOTION_LABELS
+from emotional_ai_llm.llm_engine import get_llm_engine, NOVA_SYSTEM_PROMPT
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+DETECTION_THRESHOLD = 0.5
+MAX_HISTORY_TURNS = 8  # messages kept in the prompt
+
 
 class ResponsePlanner:
-    def __init__(self, emotion_labels, detection_threshold=0.5):
-        """
-        Initializes the ResponsePlanner with a dedicated Chat SLM (BlenderBot).
-        """
-        self.emotion_labels = emotion_labels
-        self.detection_threshold = detection_threshold
-        
-        # Switch to BlenderBot - a model specifically trained for interactive, friendly chat
-        self.model_name = "facebook/blenderbot-400M-distill"
+    def __init__(self, emotion_labels=None):
+        self.emotion_labels = emotion_labels or EMOTION_LABELS
+        self.engine = get_llm_engine()
 
-        logging.info(f"Loading Chat SLM: {self.model_name}")
-        
-        # Determine device
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logging.info(f"Chat SLM will run on device: {self.device}")
-
-        try:
-            self.tokenizer = BlenderbotTokenizer.from_pretrained(self.model_name)
-            self.model = BlenderbotForConditionalGeneration.from_pretrained(self.model_name).to(self.device)
-            logging.info("Chat SLM loaded successfully.")
-        except Exception as e:
-            logging.error(f"Failed to load Chat SLM: {e}")
-            raise
-
-        # --- Therapist Persona Layers ---
-        # We will still use these to wrap the chat model's output, 
-        # ensuring the "Patient Stability" goal is met even if the model is just "chatty".
-        self.empathetic_intros = {
-            'sad': [
-                "I hear how heavy things are for you right now.",
-                "It's completely understandable that you'd feel this way.",
-                "I'm listening, and I care about what you're going through.",
-                "Thank you for sharing that with me. It sounds tough.",
-            ],
-            'anger': [
-                "It sounds like you're carrying a lot of frustration.",
-                "I can hear the anger in your words, and it's valid.",
-                "That sounds incredibly unfair and frustrating.",
-                "I'm here to listen to all of that anger.",
-            ],
-            'fear': [
-                "That sounds really scary.",
-                "I'm here with you. You're safe to express this fear.",
-                "It makes sense to feel anxious about that.",
-                "Let's take a moment. I'm listening.",
-            ],
-            'happy': [
-                "It's wonderful to see you feeling this way!",
-                "That brings a warmth to our conversation.",
-                "I'm so glad to hear some positive news.",
-            ],
-            'surprise': [
-                "That definitely sounds unexpected.",
-                "Wow, I can see why that would surprise you.",
-            ],
-            'neutral': [
-                "I'm listening.",
-                "I'm here with you.",
-                "Go on, I'm ready to hear more.",
-            ]
-        }
-        
-        self.supportive_closings = [
-            "How does that feel to say out loud?",
-            "What do you think would help you most right now?",
-            "I'm here. Would you like to tell me more?",
-            "We can take this at your own pace. What's on your mind?",
-            "How can I support you in this moment?",
+    # ------------------------------------------------------------------ #
+    def _get_dominant_emotions(self, emotion_probabilities) -> str:
+        """Comma-joined list of emotions above threshold (falls back to argmax)."""
+        dominant = [
+            self.emotion_labels[i]
+            for i, prob in enumerate(emotion_probabilities)
+            if prob > DETECTION_THRESHOLD
         ]
+        if not dominant:
+            max_idx = int(np.argmax(emotion_probabilities))
+            dominant = [self.emotion_labels[max_idx]]
+        return ", ".join(dominant)
 
-    def _get_dominant_emotions(self, emotion_probabilities):
-        """Identifies dominant emotions."""
-        dominant_emotions = []
-        for i, prob in enumerate(emotion_probabilities):
-            if prob > self.detection_threshold:
-                dominant_emotions.append(self.emotion_labels[i])
-        
-        if not dominant_emotions:
-            max_prob_idx = np.argmax(emotion_probabilities)
-            dominant_emotions.append(self.emotion_labels[max_prob_idx])
-        
-        return ", ".join(dominant_emotions) if dominant_emotions else "neutral"
-    
-    def _construct_therapist_response(self, primary_emotion, chat_model_response):
-        """
-        Wraps the Chat SLM's response in a 'Therapist Persona'.
-        """
-        # 1. Validation (The Intro)
-        intros = self.empathetic_intros.get(primary_emotion, self.empathetic_intros['neutral'])
-        intro = random.choice(intros)
-        
-        # 2. The Chat (The Model's Content)
-        # BlenderBot is good, but sometimes we want to soften it or ensure it fits.
-        # For now, we trust the model's "chat" ability.
-        content = chat_model_response.strip()
-        if content and content[0].islower():
-            content = content[0].upper() + content[1:]
-            
-        # 3. The Invitation (The Closing)
-        closing = random.choice(self.supportive_closings)
-        
-        return f"{intro} {content} {closing}"
+    @staticmethod
+    def _top_emotions(emotion_probabilities, k=3):
+        """[(label, prob)] for the k most probable emotions."""
+        probs = np.asarray(emotion_probabilities, dtype=float).flatten()
+        order = np.argsort(probs)[::-1][:k]
+        return [(EMOTION_LABELS[i], float(probs[i])) for i in order]
 
-    def generate_empathetic_response(self, user_input_text, current_emotion_probabilities, conversation_context_vector, user_facial_emotion: str = "neutral"):
+    # ------------------------------------------------------------------ #
+    def generate_empathetic_response(
+        self,
+        user_input_text: str,
+        current_emotion_probabilities,
+        conversation_context_vector=None,   # kept for backward compat (unused)
+        user_facial_emotion: str = "neutral",
+        history=None,
+    ) -> str:
         """
-        Generates a response using the Chat SLM (BlenderBot), influenced by the Analysis SLM (Emotion Detector).
+        Build an emotion-aware prompt and generate the reply with the local LLM.
+        `history` is an optional list of {'role': 'user'|'assistant', 'content': str}.
         """
-        # 1. ANALYSIS LAYER (From your other "SLM")
-        dominant_emotions_str = self._get_dominant_emotions(current_emotion_probabilities)
-        primary_emotion = dominant_emotions_str.split(',')[0].strip() if dominant_emotions_str else "neutral"
-        
-        logging.info(f"Chat Planner received Analysis: Emotion='{primary_emotion}'")
+        dominant_str = self._get_dominant_emotions(current_emotion_probabilities)
+        primary = dominant_str.split(",")[0].strip().lower()
+        top = self._top_emotions(current_emotion_probabilities)
+        top_str = ", ".join(f"{label} {prob:.0%}" for label, prob in top)
 
-        # 2. CHAT LAYER (The Interactive SLM)
+        emotion_context = (
+            f"[Emotional analysis of the user's current state]\n"
+            f"- Dominant emotion: {primary}\n"
+            f"- Full readout: {top_str}\n"
+            f"- Facial expression (camera): {user_facial_emotion}\n"
+            f"Respond in a way that genuinely fits this state."
+        )
+
+        messages = [{"role": "system", "content": NOVA_SYSTEM_PROMPT}]
+
+        # Trimmed conversation history for continuity
+        if history:
+            for msg in history[-MAX_HISTORY_TURNS:]:
+                role = msg.get("role")
+                content = (msg.get("content") or "").strip()
+                if role in ("user", "assistant") and content:
+                    messages.append({"role": role, "content": content})
+
+        messages.append({
+            "role": "user",
+            "content": f"{emotion_context}\n\nThe user says: \"{user_input_text}\""
+        })
+
         try:
-            # --- INTERCONNECTION: Analysis SLM -> Chat SLM ---
-            # Explicitly tell the Chat SLM about the detected emotion to guide its response.
-            # This "mingles" the two models: Analysis sets the context, Chat generates the content.
-            augmented_input = user_input_text
-            if primary_emotion in ['sad', 'anger', 'fear', 'happy', 'disgust']:
-                # Prepend the emotion as a statement so BlenderBot responds to it
-                augmented_input = f"I feel {primary_emotion}. {user_input_text}"
-                logging.info(f"Augmented Input for Chat SLM: '{augmented_input}'")
-
-            inputs = self.tokenizer([augmented_input], return_tensors="pt").to(self.device)
-            
-            reply_ids = self.model.generate(
-                **inputs,
-                max_length=128,
-                do_sample=True,
-                top_p=0.9,      # Nucleus sampling for more natural text
-                temperature=0.8 # Slight creativity
-            )
-            
-            chat_response = self.tokenizer.batch_decode(reply_ids, skip_special_tokens=True)[0]
-            logging.info(f"Chat SLM Raw Output: {chat_response}")
-            
-            # 3. STABILIZATION LAYER (Therapist Wrapper)
-            # We take the "friendly chat" from the SLM and wrap it in "emotional stability" logic.
-            final_response = self._construct_therapist_response(primary_emotion, chat_response)
-            
+            response = self.engine.chat(messages, temperature=0.7, max_tokens=220)
+            logging.info(f"LLM response generated (primary emotion: {primary})")
+            return response
         except Exception as e:
-            logging.error(f"Error in Chat SLM: {e}")
-            final_response = "I'm here with you. I'm having a little trouble finding the right words, but I'm listening. Please continue."
+            logging.error(f"LLM generation failed: {e}")
+            return (
+                "I'm here with you. I'm having a little trouble finding the right "
+                "words just now, but I'm listening - please tell me more."
+            )
 
-        return final_response
 
 if __name__ == "__main__":
-    print("Initializing Chat SLM (BlenderBot)...")
-    # Dummy labels
-    labels = ['anger', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
-    planner = ResponsePlanner(labels)
-    
-    print("\n--- Test Interaction ---")
-    user_text = "I lost the game and I feel terrible."
-    # Simulate 'sad' emotion detected by Analysis SLM
-    probs = np.array([0.05, 0.05, 0.05, 0.05, 0.7, 0.05, 0.05]) 
-    
-    resp = planner.generate_empathetic_response(user_text, probs, None)
-    print(f"User: {user_text}")
-    print(f"AI: {resp}")
+    planner = ResponsePlanner()
+    probs = np.array([0.05, 0.02, 0.05, 0.04, 0.72, 0.03, 0.09])  # sad
+    resp = planner.generate_empathetic_response(
+        user_input_text="I lost the game and I feel terrible.",
+        current_emotion_probabilities=probs,
+        user_facial_emotion="sad",
+        history=[{"role": "user", "content": "hey"},
+                 {"role": "assistant", "content": "Hello! How are you feeling today?"}],
+    )
+    print("NOVA:", resp)

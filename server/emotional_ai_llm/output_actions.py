@@ -1,6 +1,11 @@
 # emotional_ai_llm/output_actions.py
 
-import pyttsx3
+# TTS is optional — the web UI does not use it; the CLI falls back gracefully.
+try:
+    import pyttsx3
+except ImportError:
+    pyttsx3 = None
+
 import random
 import numpy as np
 
@@ -10,7 +15,7 @@ class OutputActions:
         Initializes the OutputActions module, including the TTS engine.
         """
         try:
-            self.tts_engine = pyttsx3.init()
+            self.tts_engine = pyttsx3.init() if pyttsx3 is not None else None
             # Optional: Configure TTS properties (e.g., speed, voice)
             # self.tts_engine.setProperty('rate', 150) # Speed
             # voices = self.tts_engine.getProperty('voices')
