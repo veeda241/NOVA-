@@ -50,8 +50,10 @@ services:
     runtime: node
     plan: free
     rootDir: client
-    buildCommand: npm install && npm run build && npm install -g serve
-    startCommand: serve -s dist -l $PORT
+    # `serve` is a devDependency, so no global install is needed (Render's
+    # build user can't write to /usr/lib/node_modules).
+    buildCommand: npm install && npm run build
+    startCommand: npx serve -s dist -l $PORT
     envVars:
       - key: VITE_API_URL
         sync: false
