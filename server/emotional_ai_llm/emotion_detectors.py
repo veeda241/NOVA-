@@ -37,7 +37,8 @@ _TEXT_LABEL_MAP = {"joy": "happy", "sadness": "sad"}
 _FER_LABEL_MAP = {"angry": "anger", "happy": "happy", "sad": "sad",
                   "fearful": "fear", "surprised": "surprise", "disgusted": "disgust",
                   "neutral": "neutral"}
-_ER_LABEL_MAP = {"angry": "anger", "happy": "happy", "sad": "sad", "neutral": "neutral"}
+# superb/wav2vec2-base-superb-er id2label is {0: neu, 1: hap, 2: ang, 3: sad}
+_ER_LABEL_MAP = {"ang": "anger", "hap": "happy", "sad": "sad", "neu": "neutral"}
 
 
 class MultimodalEmotionDetector:

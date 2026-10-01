@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Send, Mic, Camera, ImagePlus, StopCircle, Loader2 } from 'lucide-react';
+import { blobToWavBase64 } from '../services/audioUtils';
 
 interface InputAreaProps {
   onSendMessage: (text: string, image?: string, audio?: string) => void;
@@ -39,16 +40,19 @@ export const InputArea: React.FC<InputAreaProps> = ({ onSendMessage, isLoading, 
         }
       };
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = () => {
-          const base64Audio = (reader.result as string).split(',')[1];
-          onSendMessage("Voice Message", undefined, base64Audio);
-        };
-        // Stop all tracks
+      mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop());
+        const recordedBlob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType || 'audio/webm',
+        });
+        try {
+          // Convert webm/opus (or Safari's mp4) to 16 kHz mono WAV the backend can read
+          const base64Audio = await blobToWavBase64(recordedBlob);
+          onSendMessage("Voice Message", undefined, base64Audio);
+        } catch (err) {
+          console.error("Failed to process recording:", err);
+          alert("Could not process the recording. Please try again.");
+        }
       };
 
       mediaRecorder.start();

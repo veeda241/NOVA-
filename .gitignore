@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Office temporary lock files (Word/Excel open a doc)
+~$*
+
 # Large Models
 server/emotional_ai_llm/fine_tuned_empathetic_t5/
 models/
@@ -34,6 +37,9 @@ models/
 *.bin
 *.gguf
 
+# Datasets (CREMA-D etc. — large, never commit)
+data/
+
 # venv
 .venv
 emotional_ai_llm_web/.venv
@@ -44,3 +50,6 @@ __pycache__/
 
 # Local env files
 .env
+
+# Machine-local settings written by the web UI (LLM provider/model choice)
+server/nova_settings.json

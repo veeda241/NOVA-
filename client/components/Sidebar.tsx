@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ChatSession } from '../types';
-import { MessageSquarePlus, MessageSquare, Trash2, Clock, LogOut, UserCircle } from 'lucide-react';
+import { MessageSquarePlus, MessageSquare, Trash2, Clock, LogOut, UserCircle, Settings } from 'lucide-react';
 import { getUserProfile, UserProfile } from '../services/userProfileService';
 
 interface SidebarProps {
@@ -13,7 +13,8 @@ interface SidebarProps {
   isOpen: boolean;
   toggleSidebar: () => void;
   isCollapsed?: boolean;
-  onViewProfile: () => void; // New prop
+  onViewProfile: () => void;
+  onViewSettings: () => void;
 }
 
 const getAvatarSrc = (gender: 'male' | 'female' | 'other' | undefined): string => {
@@ -35,7 +36,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   toggleSidebar,
   isCollapsed = false,
-  onViewProfile // New prop
+  onViewProfile,
+  onViewSettings
 }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
@@ -175,13 +177,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               )}
             </button>
-            <button 
-              onClick={onLogout}
-              className={`text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ${isCollapsed ? 'p-0' : 'p-2'}`}
-              title="Log Out"
-            >
-              <LogOut size={18} />
-            </button>
+            <div className={`flex items-center ${isCollapsed ? 'gap-1' : 'gap-2'}`}>
+              <button 
+                onClick={onViewSettings}
+                className={`text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ${isCollapsed ? 'p-2' : 'p-2'}`}
+                title="Settings"
+              >
+                <Settings size={18} />
+              </button>
+              <button 
+                onClick={onLogout}
+                className={`text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ${isCollapsed ? 'p-2' : 'p-2'}`}
+                title="Log Out"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </div>
 

@@ -18,12 +18,16 @@ client-side fallback if this server is unreachable.
 
 import sys
 import os
+import re
+import json
 import logging
 import base64
 import tempfile
+import threading
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict
 
+import requests
 import numpy as np
 import cv2
 from PIL import Image
@@ -35,7 +39,12 @@ from pydantic import BaseModel
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from emotional_ai_llm.config import EMOTION_LABELS
+from emotional_ai_llm.config import (
+    EMOTION_LABELS,
+    ENABLE_TEXT_EMOTION,
+    ENABLE_VISION_EMOTION,
+    ENABLE_AUDIO_EMOTION,
+)
 from emotional_ai_llm.emotion_detectors import get_detector
 from emotional_ai_llm.response_planner import ResponsePlanner
 from emotional_ai_llm.report_generator import generate_analysis_report
@@ -134,6 +143,61 @@ class ChatResponse(BaseModel):
 
 class ReportRequest(BaseModel):
     history: List[HistoryMessage]
+
+
+class SettingsUpdate(BaseModel):
+    provider: Optional[str] = None      # "auto" | "ollama" | "groq"
+    model: Optional[str] = None         # Ollama model tag, e.g. "granite4.1:3b"
+    ollama_host: Optional[str] = None   # e.g. "http://localhost:11434"
+
+
+class PullRequest(BaseModel):
+    name: str                           # Ollama model tag, e.g. "llama3.2:3b"
+
+
+# --- Model pull state (single background pull at a time) ---
+_pull_state = {"active": False, "model": None, "status": None,
+               "completed": 0, "total": 0, "error": None}
+_pull_lock = threading.Lock()
+
+
+def _pull_worker(host: str, name: str) -> None:
+    """Stream an Ollama /api/pull into the shared _pull_state."""
+    try:
+        resp = requests.post(f"{host}/api/pull", json={"name": name, "stream": True},
+                             stream=True, timeout=(5, 1800))
+        if resp.status_code >= 400:
+            try:
+                detail = str(resp.json().get("error") or resp.text)
+            except Exception:
+                detail = resp.text
+            with _pull_lock:
+                _pull_state.update({"active": False, "error": detail[:300]})
+            return
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            try:
+                event = json.loads(line.decode("utf-8"))
+            except Exception:
+                continue
+            with _pull_lock:
+                if "error" in event:
+                    _pull_state.update({"active": False, "error": str(event["error"])[:300]})
+                    return
+                _pull_state["status"] = event.get("status") or _pull_state["status"]
+                if event.get("total"):
+                    _pull_state["total"] = int(event["total"])
+                if event.get("completed"):
+                    _pull_state["completed"] = int(event["completed"])
+        with _pull_lock:
+            _pull_state.update({"active": False, "status": "success",
+                                "completed": _pull_state["total"]})
+        logging.info(f"Ollama model pull finished: {name}")
+    except Exception as e:
+        logging.error(f"Ollama model pull failed for {name}: {e}")
+        with _pull_lock:
+            _pull_state.update({"active": False, "error": str(e)[:300]})
 
 
 # --- Helpers ---
@@ -381,17 +445,88 @@ async def report(request_data: ReportRequest):
                             detail="Report engine unavailable. Check the LLM provider config.")
 
 
+@app.get("/models")
+async def get_models():
+    """LLM provider/model state for the Settings page (Ollama models incl.)."""
+    if llm_engine is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="LLM engine not initialized yet.")
+    return llm_engine.status()
+
+
+@app.post("/settings")
+async def update_settings(payload: SettingsUpdate):
+    """Switch LLM provider / Ollama model at runtime (persisted to disk)."""
+    if llm_engine is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="LLM engine not initialized yet.")
+    try:
+        state = llm_engine.configure(
+            provider=payload.provider,
+            model=payload.model,
+            ollama_host=payload.ollama_host,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    logging.info(f"Settings updated via API: provider={state['provider']} model={state['model']}")
+    return state
+
+
+@app.post("/models/test")
+async def test_model():
+    """Round-trip a tiny prompt through the active provider to verify chat works."""
+    if llm_engine is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="LLM engine not initialized yet.")
+    return llm_engine.test()
+
+
+@app.post("/models/pull")
+async def pull_model(payload: PullRequest):
+    """Download a model into Ollama in the background (progress via GET /models/pull)."""
+    if llm_engine is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="LLM engine not initialized yet.")
+    name = (payload.name or "").strip()
+    if not re.match(r"^[A-Za-z0-9._:/-]+$", name):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Invalid model name. Use an Ollama tag like 'llama3.2:3b'.")
+    host = llm_engine.status()["ollama"]["host"]
+    with _pull_lock:
+        if _pull_state["active"]:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail=f"A download is already running for '{_pull_state['model']}'.")
+        _pull_state.update({"active": True, "model": name, "status": "starting",
+                            "completed": 0, "total": 0, "error": None})
+    threading.Thread(target=_pull_worker, args=(host, name), daemon=True).start()
+    logging.info(f"Started Ollama pull: {name} from {host}")
+    return {"started": True, "model": name}
+
+
+@app.get("/models/pull")
+async def pull_status():
+    """Progress of the background model download."""
+    with _pull_lock:
+        return dict(_pull_state)
+
+
 @app.get("/health")
 async def health():
     """Component status for diagnostics."""
-    engine_ok = llm_engine.is_available(force_check=True) if llm_engine else False
+    state = llm_engine.status() if llm_engine else {}
     return {
         "status": "ok",
-        "llm_provider": llm_engine.provider if llm_engine else None,
-        "llm_model": llm_engine.model if llm_engine else None,
-        "llm_available": engine_ok,
+        "llm_provider": state.get("provider"),
+        "llm_model": state.get("model"),
+        "llm_available": state.get("available", False),
+        "ollama": {
+            "running": state.get("ollama", {}).get("running", False),
+            "models": len(state.get("ollama", {}).get("models", [])),
+        },
         "emotion_modalities": {
-            "text": detector is not None,
+            "text": ENABLE_TEXT_EMOTION,
+            "face": ENABLE_VISION_EMOTION,
+            "voice": ENABLE_AUDIO_EMOTION,
         },
     }
 

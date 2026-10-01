@@ -46,6 +46,18 @@ NOVA is built upon a robust, modern architecture designed for speed, scalability
 *   **Pretrained Emotion Models (Hugging Face)**: DistilRoBERTa (text), ViT-FER2013 (facial expression), wav2vec2 (voice tone) — fused into a single emotional context vector.
 *   **Uvicorn**: An ASGI web server implementation for running the Python backend.
 
+### How NOVA Perceives Emotions
+
+Every modality follows the same pattern: **raw input → bundled preprocessor → model → probabilities** over the canonical 7 emotion labels (`EMOTION_LABELS` in `server/emotional_ai_llm/config.py`), which are then fused into one emotional context vector.
+
+| Modality | Raw input | Preprocessor (decodes input → model tensor) | Model |
+|---|---|---|---|
+| **Face** | camera image (PIL) | `ViTImageProcessor` — resize to 224×224, normalize → `pixel_values` | `trpakov/vit-face-expression` (ViT-Base/16) |
+| **Voice** | mic WAV (16 kHz) | `Wav2Vec2FeatureExtractor` — resample, pad → `input_values` | `superb/wav2vec2-base-superb-er` |
+| **Text** | chat message | `AutoTokenizer` — split into word pieces → `input_ids` | `j-hartmann/emotion-english-distilroberta-base` |
+
+The preprocessor is **not a separate model** — it's resize/normalize/tokenize math that ships inside each Hugging Face model repo. In code, the app builds these pipelines in `server/emotional_ai_llm/emotion_detectors.py`; the training scripts preprocess the same way in their collate functions (`server/emotional_ai_llm/fine_tune_face_emotion.py`, `fine_tune_voice_emotion.py`).
+
 ---
 
 ## 📦 Installation & Setup
@@ -70,7 +82,12 @@ Get NOVA running on your local machine in minutes.
 2.  **Install Dependencies**
     We have streamlined the process. You can install everything from the root directory.
     *   *Frontend*: `cd client && npm install`
-    *   *Backend*: `cd server && pip install -r requirements.txt`
+    *   *Backend*: create the project virtualenv (recommended) and install:
+        ```bash
+        python -m venv .venv
+        .venv/Scripts/pip install -r server/requirements.txt   # Windows
+        # .venv/bin/pip install -r server/requirements.txt     # macOS / Linux
+        ```
 
 3.  **Environment Configuration**
     Create a `.env` file in the `client` directory:```env
@@ -95,11 +112,11 @@ GEMINI_API_KEY=your_optional_api_key_here
     ```bash
     npm run dev
     ```
-    This command utilizes `concurrently` to launch both the Python Backend and the React Frontend simultaneously.
+    This command utilizes `concurrently` to launch both the Python Backend and the React Frontend simultaneously. It picks up the project `.venv` automatically and warns if Ollama isn't running.
 
 6.  **Access the Interface**
     Open your browser and navigate to:
-    *   **Frontend**: `http://localhost:5173`
+    *   **Frontend**: `http://localhost:5174`
     *   *(Backend API runs at `http://localhost:8000`)*
 
 ---
@@ -110,6 +127,18 @@ GEMINI_API_KEY=your_optional_api_key_here
 2.  **Express Yourself**: Type text, click the **Microphone** to speak, or click the **Camera** to analyze your facial expression.
 3.  **Receive Empathy**: NOVA will respond in real-time, adjusting its tone based on your inputs.
 4.  **Generate Report**: After a conversation, click the **"Generate Report"** button in the header. NOVA's SLM will digest the session and present a detailed analysis of your mental well-being.
+
+### ⚙️ Model Management (Settings page)
+
+Open the **gear icon** (top-right of the chat, or the sidebar footer) to manage which model powers NOVA — no config files needed:
+
+*   **Provider**: switch between `Auto` (Ollama when running, Groq otherwise), `Ollama` (fully local/private) and `Groq` (cloud).
+*   **Installed models**: pick any model already in your local Ollama install. Models without chat support are flagged.
+*   **Download new models**: type any [Ollama tag](https://ollama.com/library) (e.g. `llama3.2:3b`) and press **Pull** — progress is shown live in the page.
+*   **Test**: sends a tiny prompt to verify the active model actually replies, and reports latency.
+*   **Data & Privacy**: export or delete all locally stored conversations.
+
+Your choice is saved to `server/nova_settings.json` on the backend and survives restarts. The API behind the page: `GET /models`, `POST /settings`, `POST /models/test`, `POST /models/pull`, `GET /models/pull`.
 
 ---
 

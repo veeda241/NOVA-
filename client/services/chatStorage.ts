@@ -40,6 +40,21 @@ export const deleteSession = (id: string): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
 };
 
+export const clearAllSessions = (): void => {
+  localStorage.removeItem(STORAGE_KEY);
+};
+
+export const exportSessions = (): void => {
+  const sessions = getSessions();
+  const blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `nova-conversations-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 export const createNewSession = (): ChatSession => {
   return {
     id: Date.now().toString(),

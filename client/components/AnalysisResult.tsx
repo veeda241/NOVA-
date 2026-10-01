@@ -1,5 +1,6 @@
 import React from 'react';
 import { AnalysisReport } from '../types';
+import { downloadReportPdf } from '../services/pdfReportService';
 import { 
   BarChart, 
   Bar, 
@@ -18,8 +19,13 @@ interface AnalysisResultProps {
 }
 
 export const AnalysisResult: React.FC<AnalysisResultProps> = ({ report, onBack }) => {
-  const handlePrint = () => {
-    window.print();
+  const handleDownload = () => {
+    try {
+      downloadReportPdf(report);
+    } catch (error) {
+      console.error('PDF generation failed, falling back to print dialog', error);
+      window.print();
+    }
   };
 
   return (
@@ -43,7 +49,7 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({ report, onBack }
           <p className="text-slate-400 text-sm mt-1">Subject: <span className="font-semibold text-white">{report.patientName}</span></p>
         </div>
         <button 
-          onClick={handlePrint}
+          onClick={handleDownload}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg transition-all shadow-lg shadow-indigo-600/20 no-print"
         >
           <Download className="w-4 h-4" />

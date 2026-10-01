@@ -2,15 +2,18 @@
 """
 NOVA's LLM engine with pluggable providers.
 
-Both providers serve the SAME model weights (Llama-3.2-3B-Instruct):
+Both providers serve a chat-capable instruct model. Which one is used is
+controlled by the "provider" setting:
 
-  - ollama : local Unsloth GGUF weights (default for local dev, free, private)
-  - groq   : Groq's hosted API, same weights (used on Render, free tier)
+  - auto   : Ollama if reachable, otherwise Groq (default)
+  - ollama : local Ollama server — any model pulled into Ollama works
+             (default: nova-llama3.2-3b built from the Unsloth GGUF)
+  - groq   : Groq's hosted API (used on Render, free tier)
 
-Selection is controlled by the LLM_PROVIDER env var:
-  auto   -> Ollama if reachable, otherwise Groq (default)
-  ollama -> force local
-  groq   -> force Groq API
+Settings (provider / ollama model / ollama host) can be changed at runtime
+from the web UI's Settings page: `NovaLLMEngine.configure(...)` swaps the
+active provider in place and persists the choice to server/nova_settings.json,
+so `get_llm_engine()` callers always see the current engine.
 """
 
 import json
@@ -18,6 +21,7 @@ import logging
 import os
 import re
 import threading
+import time
 
 import requests
 
@@ -28,9 +32,12 @@ from emotional_ai_llm.config import (
     GROQ_API_KEY,
     GROQ_MODEL,
     GROQ_API_URL,
+    SETTINGS_PATH,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+VALID_PROVIDERS = ("auto", "ollama", "groq")
 
 NOVA_SYSTEM_PROMPT = """You are NOVA, a warm and emotionally intelligent AI companion created by NOVA Labs.
 
@@ -48,6 +55,22 @@ Guidelines:
 - Never say you are "just an AI" or a language model. You are NOVA.
 - If the user seems in danger, calmly encourage them to reach out to a crisis helpline
   or a trusted person, and stay with them."""
+
+
+def _model_present(available_names, wanted: str) -> bool:
+    """True if `wanted` matches an Ollama tag (exact or :tag variant)."""
+    wanted = (wanted or "").strip()
+    if not wanted:
+        return False
+    return any(name == wanted or name.startswith(wanted + ":") for name in available_names)
+
+
+def _ollama_error(resp) -> str:
+    """Human-readable error text from an Ollama HTTP error response."""
+    try:
+        return str(resp.json().get("error") or resp.text)[:300]
+    except Exception:
+        return resp.text[:300]
 
 
 class BaseLLMEngine:
@@ -86,7 +109,7 @@ class BaseLLMEngine:
 
 
 class OllamaLLMEngine(BaseLLMEngine):
-    """Local provider — Unsloth GGUF weights served by a self-hosted Ollama."""
+    """Local provider — any model available in the local Ollama server."""
 
     provider = "ollama"
 
@@ -96,31 +119,43 @@ class OllamaLLMEngine(BaseLLMEngine):
         self._available = None
         self._lock = threading.Lock()
 
+    def list_models(self):
+        """Installed Ollama models, or None when the server is unreachable."""
+        try:
+            resp = requests.get(f"{self.host}/api/tags", timeout=3)
+            resp.raise_for_status()
+            models = []
+            for m in resp.json().get("models", []):
+                details = m.get("details") or {}
+                models.append({
+                    "name": m.get("name", ""),
+                    "size": m.get("size", 0),
+                    "parameter_size": details.get("parameter_size", ""),
+                    "quantization": details.get("quantization_level", ""),
+                    "capabilities": m.get("capabilities") or [],
+                })
+            return sorted(models, key=lambda m: m["name"])
+        except Exception as e:
+            logging.warning(f"Ollama not reachable at {self.host}: {e}")
+            return None
+
     def is_available(self, force_check: bool = False) -> bool:
-        if self._available and not force_check:
+        if self._available is True and not force_check:
             return True
         with self._lock:
-            try:
-                resp = requests.get(f"{self.host}/api/tags", timeout=3)
-                if resp.status_code != 200:
-                    self._available = False
-                    return False
-                models = [m.get("name", "") for m in resp.json().get("models", [])]
-                base = self.model.split("/")[0]
-                self._available = any(
-                    m == self.model or m.startswith(self.model) or base in m
-                    for m in models
-                )
-                if not self._available:
-                    logging.warning(
-                        f"Ollama is running but model '{self.model}' was not found. "
-                        f"Available: {models}. Run: ollama create {self.model} -f server/models/Modelfile"
-                    )
-                return self._available
-            except Exception as e:
-                logging.warning(f"Ollama not reachable at {self.host}: {e}")
+            models = self.list_models()
+            if models is None:
                 self._available = False
                 return False
+            names = [m["name"] for m in models]
+            self._available = _model_present(names, self.model)
+            if not self._available:
+                logging.warning(
+                    f"Ollama is running but model '{self.model}' was not found. "
+                    f"Available: {names}. Pull or create it first, or pick another "
+                    f"model in NOVA's Settings page."
+                )
+            return self._available
 
     def chat(self, messages, temperature: float = 0.7, max_tokens: int = 220) -> str:
         payload = {
@@ -134,7 +169,8 @@ class OllamaLLMEngine(BaseLLMEngine):
             },
         }
         resp = requests.post(f"{self.host}/api/chat", json=payload, timeout=180)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Ollama chat failed ({resp.status_code}): {_ollama_error(resp)}")
         data = resp.json()
         content = (data.get("message") or {}).get("content", "").strip()
         if not content:
@@ -143,7 +179,7 @@ class OllamaLLMEngine(BaseLLMEngine):
 
 
 class GroqLLMEngine(BaseLLMEngine):
-    """Cloud provider — Groq's free API serving the same Llama-3.2-3B weights."""
+    """Cloud provider — Groq's free API serving hosted instruct models."""
 
     provider = "groq"
 
@@ -185,50 +221,202 @@ class GroqLLMEngine(BaseLLMEngine):
         return content
 
 
-# --- Module-level singleton ---
+class NovaLLMEngine(BaseLLMEngine):
+    """
+    Stable facade over the active provider.
+
+    The object identity never changes, so components that captured it once
+    (ResponsePlanner, report generator) always talk to the current provider
+    even after the user switches models in the Settings page.
+    """
+
+    def __init__(self, settings: dict = None):
+        self._lock = threading.RLock()
+        self._settings = settings or _load_settings()
+        self._active: BaseLLMEngine = None
+        self._rebuild()
+
+    # -- configuration ------------------------------------------------- #
+    @property
+    def settings(self) -> dict:
+        with self._lock:
+            return dict(self._settings)
+
+    def _ollama_engine(self) -> OllamaLLMEngine:
+        return OllamaLLMEngine(host=self._settings["ollama_host"],
+                               model=self._settings["model"])
+
+    def _rebuild(self):
+        with self._lock:
+            provider = (self._settings.get("provider") or "auto").lower()
+            if provider == "groq":
+                self._active = GroqLLMEngine()
+            elif provider == "ollama":
+                self._active = self._ollama_engine()
+            else:  # auto
+                ollama = self._ollama_engine()
+                if ollama.is_available(force_check=True):
+                    logging.info("Auto-detected provider: ollama (local)")
+                    self._active = ollama
+                else:
+                    groq = GroqLLMEngine()
+                    if groq.is_available():
+                        logging.info("Auto-detected provider: groq (cloud fallback)")
+                        self._active = groq
+                    else:
+                        logging.warning(
+                            "No LLM provider available: Ollama unreachable and "
+                            "GROQ_API_KEY not set. Chat will use fallback responses."
+                        )
+                        self._active = ollama  # fails per-call; planner degrades gracefully
+            logging.info(f"Active LLM provider: {self._active.provider} — model: {self._active.model}")
+
+    def configure(self, provider: str = None, model: str = None,
+                  ollama_host: str = None) -> dict:
+        """Apply new settings at runtime, persist them and return the new status."""
+        with self._lock:
+            if provider is not None:
+                provider = str(provider).strip().lower()
+                if provider not in VALID_PROVIDERS:
+                    raise ValueError(f"provider must be one of {VALID_PROVIDERS}")
+                self._settings["provider"] = provider
+            if model is not None:
+                model = str(model).strip()
+                if not model:
+                    raise ValueError("model must be a non-empty string")
+                self._settings["model"] = model
+            if ollama_host is not None:
+                host = str(ollama_host).strip().rstrip("/")
+                if not re.match(r"^https?://[^\s]+$", host):
+                    raise ValueError("ollama_host must be an http(s) URL")
+                self._settings["ollama_host"] = host
+            _save_settings(self._settings)
+            logging.info(f"LLM settings updated: {self._settings}")
+            self._rebuild()
+        return self.status()
+
+    # -- provider interface (delegated to the active engine) ------------ #
+    @property
+    def provider(self) -> str:
+        return self._active.provider
+
+    @property
+    def model(self) -> str:
+        return self._active.model
+
+    def is_available(self, force_check: bool = False) -> bool:
+        return self._active.is_available(force_check=force_check)
+
+    def chat(self, messages, temperature: float = 0.7, max_tokens: int = 220) -> str:
+        return self._active.chat(messages, temperature=temperature, max_tokens=max_tokens)
+
+    def test(self) -> dict:
+        """Round-trip a tiny prompt to prove the active provider actually chats."""
+        started = time.time()
+        try:
+            reply = self.chat(
+                [{"role": "user", "content": "Reply with the single word: ready"}],
+                temperature=0.0,
+                max_tokens=16,
+            )
+            return {
+                "ok": True,
+                "reply": reply[:120],
+                "latency_ms": int((time.time() - started) * 1000),
+                "provider": self.provider,
+                "model": self.model,
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": str(e)[:300],
+                "latency_ms": int((time.time() - started) * 1000),
+                "provider": self.provider,
+                "model": self.model,
+            }
+
+    # -- status ---------------------------------------------------------- #
+    def status(self) -> dict:
+        """Everything the Settings page needs to render provider/model state."""
+        with self._lock:
+            settings = dict(self._settings)
+            active_provider = self._active.provider
+            active_model = self._active.model
+
+        ollama = self._ollama_engine()
+        models = ollama.list_models()
+        ollama_state = {
+            "host": ollama.host,
+            "running": models is not None,
+            "models": models or [],
+            "model_present": _model_present([m["name"] for m in models], settings["model"])
+                            if models is not None else False,
+        }
+        return {
+            "provider": active_provider,
+            "model": active_model,
+            "available": self._active.is_available(),
+            "settings": settings,
+            "ollama": ollama_state,
+            "groq": {
+                "configured": bool(GROQ_API_KEY),
+                "model": GROQ_MODEL,
+            },
+        }
+
+
+# --- Settings persistence ------------------------------------------------- #
+
+_DEFAULT_SETTINGS = {
+    "provider": LLM_PROVIDER or "auto",
+    "model": NOVA_LLM_MODEL,
+    "ollama_host": OLLAMA_HOST,
+}
+
+
+def _load_settings() -> dict:
+    settings = dict(_DEFAULT_SETTINGS)
+    try:
+        if os.path.exists(SETTINGS_PATH):
+            with open(SETTINGS_PATH, "r", encoding="utf-8") as fh:
+                stored = json.load(fh)
+            if isinstance(stored, dict):
+                for key in settings:
+                    if isinstance(stored.get(key), str) and stored[key].strip():
+                        settings[key] = stored[key].strip()
+                logging.info(f"Loaded LLM settings from {SETTINGS_PATH}: {settings}")
+    except Exception as e:
+        logging.warning(f"Could not read {SETTINGS_PATH} ({e}); using defaults.")
+    if settings["provider"].lower() not in VALID_PROVIDERS:
+        settings["provider"] = "auto"
+    return settings
+
+
+def _save_settings(settings: dict) -> None:
+    try:
+        with open(SETTINGS_PATH, "w", encoding="utf-8") as fh:
+            json.dump(settings, fh, indent=2)
+    except Exception as e:
+        logging.error(f"Could not persist LLM settings to {SETTINGS_PATH}: {e}")
+
+
+# --- Module-level singleton --- #
 _engine = None
 _engine_lock = threading.Lock()
 
 
-def _build_engine() -> BaseLLMEngine:
-    provider = (LLM_PROVIDER or "auto").lower()
-    logging.info(f"LLM provider setting: {provider}")
-
-    if provider == "groq":
-        return GroqLLMEngine()
-    if provider == "ollama":
-        return OllamaLLMEngine()
-
-    # auto: prefer local Ollama, fall back to Groq
-    ollama = OllamaLLMEngine()
-    if ollama.is_available(force_check=True):
-        logging.info("Auto-detected provider: ollama (local)")
-        return ollama
-
-    groq = GroqLLMEngine()
-    if groq.is_available():
-        logging.info("Auto-detected provider: groq (cloud fallback)")
-        return groq
-
-    logging.warning(
-        "No LLM provider available: Ollama unreachable and GROQ_API_KEY not set. "
-        "Chat will use fallback responses."
-    )
-    return ollama  # will fail per-call; planner degrades gracefully
-
-
-def get_llm_engine() -> BaseLLMEngine:
+def get_llm_engine() -> NovaLLMEngine:
     global _engine
     if _engine is None:
         with _engine_lock:
             if _engine is None:
-                _engine = _build_engine()
+                _engine = NovaLLMEngine()
     return _engine
 
 
 if __name__ == "__main__":
     engine = get_llm_engine()
-    print(f"Provider: {engine.provider} | model: {engine.model} | available: {engine.is_available(force_check=True)}")
+    print(json.dumps(engine.status(), indent=2))
     if engine.is_available():
         reply = engine.chat([
             {"role": "system", "content": NOVA_SYSTEM_PROMPT},

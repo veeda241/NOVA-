@@ -13,8 +13,9 @@ import { LoginPage } from './components/LoginPage';
 import { Sidebar } from './components/Sidebar';
 import { OnboardingPage } from './components/OnboardingPage'; // Import Onboarding
 import { ProfilePage } from './components/ProfilePage'; // Import Profile
+import { SettingsPage } from './components/SettingsPage'; // Import Settings
 import DarkVeil from './components/DarkVeil';
-import { Info, FileText, Menu, UserCircle } from 'lucide-react';
+import { FileText, Menu, UserCircle, Settings } from 'lucide-react';
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -23,7 +24,7 @@ const App: React.FC = () => {
   const [lastAnalysis, setLastAnalysis] = useState<EmotionAnalysis | undefined>(undefined);
   const [showCamera, setShowCamera] = useState(false);
   // Updated view type
-  const [view, setView] = useState<'landing' | 'login' | 'signup' | 'chat' | 'analysis' | 'onboarding' | 'profile'>('landing');
+  const [view, setView] = useState<'landing' | 'login' | 'signup' | 'chat' | 'analysis' | 'onboarding' | 'profile' | 'settings'>('landing');
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [userLoggedIn, setUserLoggedIn] = useState(false);
@@ -273,6 +274,7 @@ const App: React.FC = () => {
   if (view === 'analysis') headerTitle = 'Analysis Report';
   if (view === 'onboarding') headerTitle = 'Welcome';
   if (view === 'profile') headerTitle = 'User Profile';
+  if (view === 'settings') headerTitle = 'Settings';
 
   return (
     <div className="flex h-screen w-full bg-slate-950 text-slate-200 overflow-hidden font-sans relative">
@@ -290,6 +292,7 @@ const App: React.FC = () => {
             toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             isCollapsed={isSidebarCollapsed}
             onViewProfile={() => setView('profile')}
+            onViewSettings={() => setView('settings')}
         />
       )}
 
@@ -319,7 +322,8 @@ const App: React.FC = () => {
                     <h1 className="font-bold text-lg tracking-tight text-white">{headerTitle}</h1>
                     <p className="text-[10px] text-slate-400 font-medium">
                         {view === 'chat' ? (currentSessionId ? 'Active Session' : 'New Session') : 
-                         view === 'profile' ? 'Your Personal Space' : 'Insights'}
+                         view === 'profile' ? 'Your Personal Space' : 
+                         view === 'settings' ? 'Model & app preferences' : 'Insights'}
                     </p>
                     </div>
                 </div>
@@ -333,8 +337,12 @@ const App: React.FC = () => {
                             {isAnalyzing ? <span className="animate-pulse">Analyzing...</span> : <><FileText size={14} /> Generate Report</>}
                         </button>
                     )}
-                    <button className="text-slate-500 hover:text-slate-300">
-                    <Info size={20} />
+                    <button 
+                        onClick={() => setView('settings')}
+                        className="text-slate-500 hover:text-slate-300 transition-colors"
+                        title="Settings"
+                    >
+                    <Settings size={20} />
                     </button>
                     
                     {/* Profile Icon */}
@@ -368,6 +376,10 @@ const App: React.FC = () => {
             ) : view === 'profile' ? (
                  <div className="flex-1 overflow-y-auto bg-slate-950 scrollbar-hide">
                     <ProfilePage onBack={() => setView('chat')} />
+                 </div>
+            ) : view === 'settings' ? (
+                 <div className="flex-1 overflow-y-auto bg-slate-950 scrollbar-hide">
+                    <SettingsPage onBack={() => setView('chat')} />
                  </div>
             ) : (
               <>

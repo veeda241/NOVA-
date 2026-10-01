@@ -44,6 +44,10 @@ EMBEDDING_DIM_FUSION = TEXT_EMBEDDING_DIM + AUDIO_EMBEDDING_DIM + VISION_EMBEDDI
 #   "groq"   -> force Groq API (used on Render deploy)
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "auto")
 
+# Runtime settings persisted by the web UI's Settings page (model switching).
+# Written to disk so the choice survives backend restarts.
+SETTINGS_PATH = os.path.join(SERVER_DIR, "nova_settings.json")
+
 # Local provider (Unsloth weights served via Ollama)
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 NOVA_LLM_MODEL = os.environ.get("NOVA_LLM_MODEL", "nova-llama3.2-3b")
@@ -59,7 +63,23 @@ ENABLE_TEXT_EMOTION = os.environ.get("ENABLE_TEXT_EMOTION", "true").lower() == "
 ENABLE_VISION_EMOTION = os.environ.get("ENABLE_VISION_EMOTION", "true").lower() == "true"
 ENABLE_AUDIO_EMOTION = os.environ.get("ENABLE_AUDIO_EMOTION", "true").lower() == "true"
 
-# --- Pretrained emotion models (Hugging Face) ---
-TEXT_EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base"
-FACIAL_EMOTION_MODEL = "trpakov/vit-face-expression"
-SPEECH_EMOTION_MODEL = "superb/wav2vec2-base-superb-er"
+# --- Emotion models ---
+# Fine-tuned weights in server/models/ take priority; the Hugging Face base
+# model is used when the folder is absent (fresh clone, hosted deploy).
+def _emotion_model(local_dir: str, hf_repo: str) -> str:
+    path = os.path.join(MODELS_DIR, local_dir)
+    return path if os.path.isdir(path) else hf_repo
+
+
+TEXT_EMOTION_MODEL = os.environ.get("TEXT_EMOTION_MODEL") or _emotion_model(
+    "text_emotion_distilroberta_ft",
+    "j-hartmann/emotion-english-distilroberta-base",
+)
+FACIAL_EMOTION_MODEL = os.environ.get("FACIAL_EMOTION_MODEL") or _emotion_model(
+    "face_emotion_vit_ft",
+    "trpakov/vit-face-expression",
+)
+SPEECH_EMOTION_MODEL = os.environ.get("SPEECH_EMOTION_MODEL") or _emotion_model(
+    "voice_emotion_wav2vec2_ft",
+    "superb/wav2vec2-base-superb-er",
+)
