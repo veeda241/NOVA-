@@ -40,21 +40,23 @@ NOVA is built upon a robust, modern architecture designed for speed, scalability
 
 ### **Backend ( The Brain of NOVA )**
 *   **Python FastAPI**: A high-performance web framework for building APIs with Python 3.10+.
-*   **Llama-3.2-3B-Instruct** — NOVA's conversational brain, with two interchangeable providers:
-    *   *Local*: Unsloth GGUF weights served by **Ollama** (100% private, free, offline)
-    *   *Cloud*: **Groq API** serving the same weights (used on Render deploys)
-*   **Pretrained Emotion Models (Hugging Face)**: DistilRoBERTa (text), ViT-FER2013 (facial expression), wav2vec2 (voice tone) — fused into a single emotional context vector.
+*   **Llama conversational brain**, with two interchangeable providers:
+    *   *Local*: Llama-3.2-3B-Instruct Unsloth GGUF weights served by **Ollama** (100% private, free, offline)
+    *   *Cloud*: **Groq API** serving `llama-3.1-8b-instant` — a different, larger model, since Groq decommissioned the 3.2-3B line
+*   **Emotion models (Hugging Face)**: three transformers fine-tuned in-repo — DistilRoBERTa on dair-ai/emotion (text), ViT-Base/16 on FER2013 (facial expression), wav2vec2-base on RAVDESS + CREMA-D (voice tone) — fused into a single emotional context vector. Weights are pulled from the Hub, not committed (see **Deploying NOVA** below); each falls back to its base model when the fine-tuned folder is absent.
 *   **Uvicorn**: An ASGI web server implementation for running the Python backend.
 
 ### How NOVA Perceives Emotions
 
 Every modality follows the same pattern: **raw input → bundled preprocessor → model → probabilities** over the canonical 7 emotion labels (`EMOTION_LABELS` in `server/emotional_ai_llm/config.py`), which are then fused into one emotional context vector.
 
-| Modality | Raw input | Preprocessor (decodes input → model tensor) | Model |
-|---|---|---|---|
-| **Face** | camera image (PIL) | `ViTImageProcessor` — resize to 224×224, normalize → `pixel_values` | `trpakov/vit-face-expression` (ViT-Base/16) |
-| **Voice** | mic WAV (16 kHz) | `Wav2Vec2FeatureExtractor` — resample, pad → `input_values` | `superb/wav2vec2-base-superb-er` |
-| **Text** | chat message | `AutoTokenizer` — split into word pieces → `input_ids` | `j-hartmann/emotion-english-distilroberta-base` |
+| Modality | Raw input | Preprocessor (decodes input → model tensor) | Fine-tuned model | Base | Train / eval | Eval accuracy |
+|---|---|---|---|---|---|---|
+| **Text** | chat message | `AutoTokenizer` — split into word pieces → `input_ids` | `nova-text-emotion-ft` | `j-hartmann/emotion-english-distilroberta-base` | 16,000 / 2,000 | **0.9595** |
+| **Face** | camera image (PIL) | `ViTImageProcessor` — resize to 224×224, normalize → `pixel_values` | `nova-face-emotion-ft` | `trpakov/vit-face-expression` (ViT-Base/16) | 8,000 / 1,000 | **0.683** |
+| **Voice** | mic WAV (16 kHz) | `Wav2Vec2FeatureExtractor` — resample, pad → `input_values` | `nova-voice-emotion-ft` | `superb/wav2vec2-base-superb-er` | 3,000 / 600 | **0.5500** |
+
+All three were trained on the `train` split only, with the eval split held out for measurement (no weight updates from it) — see the split logic in each `server/emotional_ai_llm/fine_tune_*.py`. Face and voice are frozen-encoder head-only fine-tunes, which caps their accuracy; the numbers above are honest held-out figures, not training accuracy.
 
 The preprocessor is **not a separate model** — it's resize/normalize/tokenize math that ships inside each Hugging Face model repo. In code, the app builds these pipelines in `server/emotional_ai_llm/emotion_detectors.py`; the training scripts preprocess the same way in their collate functions (`server/emotional_ai_llm/fine_tune_face_emotion.py`, `fine_tune_voice_emotion.py`).
 
@@ -144,18 +146,25 @@ Your choice is saved to `server/nova_settings.json` on the backend and survives 
 
 ---
 
-## ☁️ Deploying to Render
+## ☁️ Deploying NOVA
 
-The repo includes a [render.yaml](render.yaml) Blueprint, so deployment is one click:
+The backend runs on a **Hugging Face Space** and the frontend on **Render**. That split exists because of RAM: Render's free plan gives 512MB, which fits the API but not the ~1GB of emotion-model weights, while a free Space gives 16GB — enough for all three modalities on CPU.
 
-1. Push this repo to GitHub.
-2. In Render: **New → Blueprint** and select the repo. Both services are created automatically.
-3. Set the environment variables when prompted:
-   *   `nova-backend` → `GROQ_API_KEY` (get a free key at [console.groq.com/keys](https://console.groq.com/keys))
-   *   `nova-frontend` → `VITE_API_URL` (your backend URL, e.g. `https://nova-backend-xxxx.onrender.com`)
-4. Redeploy the frontend after setting `VITE_API_URL`.
+The weights are also too large for GitHub (100MB per-file limit), so they live on the Hub and are pulled by the Space at runtime. [scripts/publish_to_hf.py](scripts/publish_to_hf.py) uploads them; the fine-tune scripts in `server/emotional_ai_llm/` regenerate them.
 
-**Deploy architecture:** on Render the backend chats via the free Groq API (hosted Llama) instead of the local Ollama model, which can't fit in cloud RAM. The default Blueprint runs on the free plan (512MB) with the HF emotion models disabled — chat, safety layer and reports all work; text/face/voice emotion analysis degrades to a neutral baseline. To enable all 3 emotion modalities, set the `ENABLE_*_EMOTION` vars to `"true"` and switch `nova-backend` to `plan: standard` (~2GB RAM; the free plan is too small for torch + the models).
+1. **Publish the models and the Space** (needs a free HF account and a [write token](https://huggingface.co/settings/tokens)):
+   ```bash
+   .venv/Scripts/hf.exe auth login
+   .venv/Scripts/python.exe scripts/publish_to_hf.py
+   ```
+   This creates `nova-{text,face,voice}-emotion-ft` model repos and the `nova-backend` Space from [deploy/hf-space/](deploy/hf-space/).
+2. **Set the one secret** on the Space: Settings → Variables and secrets → `GROQ_API_KEY` (free key at [console.groq.com/keys](https://console.groq.com/keys)). Every other value is baked into the Dockerfile.
+3. **Deploy the frontend**: in Render, **New → Blueprint**, select this repo. Only `nova-frontend` is created.
+4. Set `VITE_API_URL` on `nova-frontend` to your Space URL (e.g. `https://veeda241-nova-backend.hf.space`), then redeploy — Vite bakes the value in at build time.
+
+**Cold starts:** a free Space sleeps after ~48h idle and re-downloads the weights on wake. Models load in a background thread, so `/health` answers immediately and reports each one under `emotion_models_loaded`; emotion analysis returns a neutral baseline until they are in RAM, while chat works throughout.
+
+**After a code change:** push to GitHub, then trigger **Factory rebuild** on the Space — the Dockerfile clones the repo at build time.
 
 **Local vs Deploy:** local development stays 100% local (Ollama + Unsloth GGUF, no API key). The code auto-detects: it uses Ollama when reachable, otherwise falls back to Groq.
 

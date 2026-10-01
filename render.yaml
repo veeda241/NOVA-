@@ -1,50 +1,30 @@
-# Render Blueprint for NOVA (cloud deploy)
+# Render Blueprint for NOVA — frontend only.
 #
-# Architecture on Render (free plan: chat-only):
-#   - Chat/report brain : Groq API (the local Ollama server isn't reachable in the cloud)
-#   - Emotion models    : disabled to fit the 512MB free plan. To run all 3 HF modalities
-#                         (text / face / voice), switch nova-backend to plan: standard
-#                         (~2GB RAM) and set the ENABLE_*_EMOTION vars to "true".
-#   - Frontend          : Vite build served as a small Node web service (free plan)
+# Where everything runs:
+#   - Frontend          : this blueprint. Vite build served as a small Node web
+#                         service on Render's free plan.
+#   - Backend (FastAPI) : a Hugging Face Space, not Render. See
+#                         deploy/hf-space/. Render's free plan gives 512MB of RAM,
+#                         which fits the API but not the ~1GB of emotion-model
+#                         weights; a free Space gives 16GB, so all three modalities
+#                         (text / face / voice) run there on CPU.
+#   - Chat/report brain : the Groq API, called from the Space. The local Ollama
+#                         server is unreachable from the cloud.
 #
-# After the first deploy:
-#   1. Set GROQ_API_KEY on nova-backend (https://console.groq.com/keys - free)
-#   2. Set VITE_API_URL on nova-frontend to the backend URL, then redeploy the frontend
+# Setup order:
+#   1. Publish the models and the Space:  python scripts/publish_to_hf.py
+#   2. Set GROQ_API_KEY on the Space (Settings -> Variables and secrets).
+#      Free key: https://console.groq.com/keys
+#   3. Deploy this blueprint, set VITE_API_URL on nova-frontend to the Space URL
+#      (e.g. https://veeda241-nova-backend.hf.space), then redeploy the frontend.
 #
-# Local development stays 100% local: Ollama + Unsloth GGUF (no API key needed).
+# If an older nova-backend service from a previous version of this file is still
+# on your Render account, delete it there — removing it from the blueprint does
+# not shut it down.
+#
+# Local development stays 100% local: Ollama + Unsloth GGUF, no API key needed.
 
 services:
-  # ---------------- Backend (FastAPI) ----------------
-  - type: web
-    name: nova-backend
-    runtime: python
-    plan: free                  # 512MB: fits the FastAPI + Groq brain only (see emotion toggles below)
-    rootDir: server
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn fastapi_app:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120
-    healthCheckPath: /health
-    envVars:
-      # render.yaml has no pythonVersion field; Render selects the interpreter from this env var
-      - key: PYTHON_VERSION
-        value: "3.11.9"
-      - key: LLM_PROVIDER
-        value: groq                 # force Groq on Render (no Ollama in the cloud)
-      - key: GROQ_API_KEY
-        sync: false                 # set in Render dashboard: https://console.groq.com/keys
-      - key: GROQ_MODEL
-        value: llama-3.1-8b-instant # Groq decommissioned the Llama-3.2 3B models
-      # The HF emotion models need ~2GB of RAM, so they stay off on the free tier:
-      # emotion analysis degrades to a neutral baseline, chat + reports keep working.
-      - key: ENABLE_TEXT_EMOTION
-        value: "false"
-      - key: ENABLE_VISION_EMOTION
-        value: "false"
-      - key: ENABLE_AUDIO_EMOTION
-        value: "false"
-      - key: PYTHONUNBUFFERED
-        value: "1"
-
-  # ---------------- Frontend (Vite build served via `serve`) ----------------
   - type: web
     name: nova-frontend
     runtime: node
@@ -57,8 +37,8 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false
-        # Set this to the backend URL (e.g. https://nova-backend-xxxx.onrender.com)
-        # BEFORE building, then redeploy the frontend - Vite bakes it in at build time.
+        # Set this to the Space URL BEFORE building, then redeploy the frontend —
+        # Vite bakes it in at build time, so a later change needs a rebuild.
       - key: GEMINI_API_KEY
         sync: false
         # Optional: only used as a client-side fallback if the backend is unreachable.
